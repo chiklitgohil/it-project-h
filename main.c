@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "crud.h"
+#include "report.h"
 
 int main()
 {
@@ -16,7 +17,7 @@ int main()
 		printf("\n-- Appointments & Records --\n");
 		printf("9. Schedule Appointment\n10. View Appointments\n11. Cancel Appointment\n");
 		printf("12. Add Medical Record\n13. View Patient Medical History\n");
-		printf("\n0. Exit\n");
+		printf("14. View Patient Bills\n\n0. Exit\n");
 		printf("Enter choice: ");
 		scanf("%d", &choice);
 		while (getchar() != '\n')
@@ -63,6 +64,9 @@ int main()
 		case 13:
 			viewPatientMedicalHistory();
 			break;
+		case 14:
+			viewPatientBills();
+			break;
 		case 0:
 			exit(0);
 		default:
@@ -70,4 +74,3 @@ int main()
 		}
 	}
 }
-

@@ -258,24 +258,4 @@ void cancelAppointment()
     // This could be an update or a delete/re-add operation.
     printf("Function not yet implemented.\n");
 }
-
-// --- Medical Record Management Functions (Skeletons) ---
-void addMedicalRecord()
-{
-    printf("\n--- Add Medical Record ---\n");
-    // TODO: Ask for an appointment ID.
-    // TODO: Verify the appointment exists.
-    // TODO: Get diagnosis and prescription details.
-    // TODO: Save the new medical record.
-    printf("Function not yet implemented.\n");
-}
-
-void viewPatientMedicalHistory()
-{
-    printf("\n--- View Patient Medical History ---\n");
-    // TODO: Ask for a patient ID.
-    // TODO: Find all appointments for that patient.
-    // TODO: For each appointment, find and display the corresponding medical record.
-    printf("Function not yet implemented.\n");
-}
 // main() moved to "main.c" so this file provides only the CRUD and helper functions.
