@@ -10,89 +10,6 @@ void getInput(char *buffer, int size)
     buffer[strcspn(buffer, "\n")] = 0; // Remove trailing newline
 }
 
-// Small helper functions used by appointment/record features
-static int patientExists(int id)
-{
-    FILE *fp = fopen(PATIENT_FILE, "rb");
-    if (!fp)
-        return 0;
-    Patient p;
-    while (fread(&p, sizeof(Patient), 1, fp))
-    {
-        if (p.id == id)
-        {
-            fclose(fp);
-            return 1;
-        }
-    }
-    fclose(fp);
-    return 0;
-}
-
-static int doctorExists(int id)
-{
-    FILE *fp = fopen(DOCTOR_FILE, "rb");
-    if (!fp)
-        return 0;
-    Doctor d;
-    while (fread(&d, sizeof(Doctor), 1, fp))
-    {
-        if (d.id == id)
-        {
-            fclose(fp);
-            return 1;
-        }
-    }
-    fclose(fp);
-    return 0;
-}
-
-static int appointmentExists(int id)
-{
-    FILE *fp = fopen(APPOINTMENT_FILE, "rb");
-    if (!fp)
-        return 0;
-    Appointment a;
-    while (fread(&a, sizeof(Appointment), 1, fp))
-    {
-        if (a.id == id)
-        {
-            fclose(fp);
-            return 1;
-        }
-    }
-    fclose(fp);
-    return 0;
-}
-
-static int getNextAppointmentId()
-{
-    FILE *fp = fopen(APPOINTMENT_FILE, "rb");
-    if (!fp)
-        return 1;
-    Appointment a;
-    int maxId = 0;
-    while (fread(&a, sizeof(Appointment), 1, fp))
-        if (a.id > maxId)
-            maxId = a.id;
-    fclose(fp);
-    return maxId + 1;
-}
-
-static int getNextMedicalRecordId()
-{
-    FILE *fp = fopen(MEDICAL_RECORD_FILE, "rb");
-    if (!fp)
-        return 1;
-    MedicalRecord r;
-    int maxId = 0;
-    while (fread(&r, sizeof(MedicalRecord), 1, fp))
-        if (r.id > maxId)
-            maxId = r.id;
-    fclose(fp);
-    return maxId + 1;
-}
-
 void addPatient()
 {
     FILE *fp = fopen(PATIENT_FILE, "ab+");
@@ -113,8 +30,10 @@ void addPatient()
     printf("Name: ");
     scanf("%s", p.name);
     getInput(p.name, sizeof(p.name));
+
     printf("Age: ");
     scanf("%d", &p.age);
+
     while (getchar() != '\n')
         ; // Clear input buffer
     printf("Gender: ");
@@ -205,6 +124,8 @@ void deletePatient()
     fclose(fp);
     fclose(temp);
     remove(PATIENT_FILE);
+
+
     rename("data/temp.dat", PATIENT_FILE);
 
     if (!found)
@@ -314,82 +235,25 @@ void deleteDoctor()
 void scheduleAppointment()
 {
     printf("\n--- Schedule Appointment ---\n");
-    Appointment a;
-    // Generate ID
-    a.id = getNextAppointmentId();
-
-    printf("Enter Patient ID: ");
-    if (scanf("%d", &a.patient_id) != 1)
-    {
-        while (getchar() != '\n')
-            ;
-        printf("Invalid input.\n");
-        return;
-    }
-    while (getchar() != '\n')
-        ;
-    if (!patientExists(a.patient_id))
-    {
-        printf("Patient with ID %d does not exist.\n", a.patient_id);
-        return;
-    }
-
-    printf("Enter Doctor ID: ");
-    if (scanf("%d", &a.doctor_id) != 1)
-    {
-        while (getchar() != '\n')
-            ;
-        printf("Invalid input.\n");
-        return;
-    }
-    while (getchar() != '\n')
-        ;
-    if (!doctorExists(a.doctor_id))
-    {
-        printf("Doctor with ID %d does not exist.\n", a.doctor_id);
-        return;
-    }
-
-    printf("Enter appointment date/time (YYYY-MM-DD HH:MM): ");
-    getInput(a.appointment_date, sizeof(a.appointment_date));
-    printf("Enter reason: ");
-    getInput(a.reason, sizeof(a.reason));
-    strncpy(a.status, "Scheduled", sizeof(a.status));
-
-    FILE *fp = fopen(APPOINTMENT_FILE, "ab+");
-    if (!fp)
-    {
-        perror("Error opening appointment file");
-        return;
-    }
-    fwrite(&a, sizeof(Appointment), 1, fp);
-    fclose(fp);
-    printf("Appointment scheduled with ID %d\n", a.id);
+    // TODO: Check if patient and doctor IDs exist.
+    // TODO: Get appointment details (date, reason).
+    // TODO: Check for scheduling conflicts.
+    // TODO: Save the new appointment to APPOINTMENT_FILE.
+    printf("Function not yet implemented.\n");
 }
 
 void viewAppointments()
 {
     printf("\n--- View Appointments ---\n");
-    FILE *fp = fopen(APPOINTMENT_FILE, "rb");
-    if (!fp)
-    {
-        printf("No appointments found.\n");
-        return;
-    }
-    Appointment a;
-    printf("\n%-5s %-10s %-10s %-20s %-25s %-10s\n",
-           "ID", "Patient", "Doctor", "Date/Time", "Reason", "Status");
-    while (fread(&a, sizeof(Appointment), 1, fp))
-    {
-        printf("%-5d %-10d %-10d %-20s %-25s %-10s\n",
-               a.id, a.patient_id, a.doctor_id, a.appointment_date, a.reason, a.status);
-    }
-    fclose(fp);
+    // TODO: Open APPOINTMENT_FILE and display all records.
+    // TODO (Advanced): Add filtering by patient ID or doctor ID.
+    printf("Function not yet implemented.\n");
 }
 
 void cancelAppointment()
 {
     printf("\n--- Cancel Appointment ---\n");
+<<<<<<< HEAD
 
     int id;
     printf("Enter Appointment ID to cancel: ");
@@ -609,4 +473,11 @@ int main()
             printf("Invalid choice.\n");
         }
     }
+=======
+    // TODO: Ask for appointment ID.
+    // TODO: Find the appointment and change its status to "Cancelled".
+    // This could be an update or a delete/re-add operation.
+    printf("Function not yet implemented.\n");
+>>>>>>> bfe397a18dde91261124af7393bf84e2d963400e
 }
+// main() moved to "main.c" so this file provides only the CRUD and helper functions.
