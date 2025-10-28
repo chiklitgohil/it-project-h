@@ -13,56 +13,56 @@ buffer[strcspn(buffer, "\n")] = 0; // Remove trailing newline
 // Small helper functions used by appointment/record features
 static int patientExists(int id)
 {
-FILE *fp = fopen(PATIENT_FILE, "rb");
-if (!fp)
-return 0;
-Patient p;
-while (fread(&p, sizeof(Patient), 1, fp))
-{
-if (p.id == id)
-{
-fclose(fp);
-return 1;
-}
-}
-fclose(fp);
-return 0;
+	FILE *fp = fopen(PATIENT_FILE, "rb");
+	if (!fp)
+		return 0;
+	Patient p;
+	while (fread(&p, sizeof(Patient), 1, fp))
+	{
+		if (p.id == id)
+		{
+			fclose(fp);
+			return 1;
+		}
+	}
+	fclose(fp);
+	return 0;
 }
 
 static int doctorExists(int id)
 {
-FILE *fp = fopen(DOCTOR_FILE, "rb");
-if (!fp)
-return 0;
-Doctor d;
-while (fread(&d, sizeof(Doctor), 1, fp))
-{
-if (d.id == id)
-{
-fclose(fp);
-return 1;
-}
-}
-fclose(fp);
-return 0;
+	FILE *fp = fopen(DOCTOR_FILE, "rb");
+	if (!fp)
+		return 0;
+	Doctor d;
+	while (fread(&d, sizeof(Doctor), 1, fp))
+	{
+		if (d.id == id)
+		{
+			fclose(fp);
+			return 1;
+		}
+	}
+	fclose(fp);
+	return 0;
 }
 
 static int appointmentExists(int id)
 {
-FILE *fp = fopen(APPOINTMENT_FILE, "rb");
-if (!fp)
-return 0;
-Appointment a;
-while (fread(&a, sizeof(Appointment), 1, fp))
-{
-if (a.id == id)
-{
-fclose(fp);
-return 1;
-}
-}
-fclose(fp);
-return 0;
+	FILE *fp = fopen(APPOINTMENT_FILE, "rb");
+	if (!fp)
+		return 0;
+	Appointment a;
+	while (fread(&a, sizeof(Appointment), 1, fp))
+	{
+		if (a.id == id)
+		{
+			fclose(fp);
+			return 1;
+		}
+	}
+	fclose(fp);
+	return 0;
 }
 
 static int getNextAppointmentId()
@@ -111,8 +111,11 @@ while (getchar() != '\n')
 ; // Clear input buffer
 
 printf("Name: ");
-scanf("%s", p.name);
-getInput(p.name, sizeof(p.name));
+	 /* Read the full name line safely. Using scanf("%s", ...) before
+		 fgets/getInput causes the subsequent fgets to read the leftover
+		 newline and overwrite the name with an empty string. Use only
+		 getInput (fgets wrapper) here. */
+	 getInput(p.name, sizeof(p.name));
 printf("Age: ");
 scanf("%d", &p.age);
 while (getchar() != '\n')
@@ -154,25 +157,64 @@ int id, found = 0;
 printf("Enter Patient ID to update: ");
 scanf("%d", &id);
 
+	while (getchar() != '\n')
+		; // clear input buffer
+
 Patient p;
 while (fread(&p, sizeof(Patient), 1, fp))
 {
 if (p.id == id)
 {
-printf("Enter new Name: ");
-scanf("%s", p.name);
-printf("Enter new Age: ");
-scanf("%d", &p.age);
-printf("Enter new Gender: ");
-scanf("%s", p.gender);
-printf("Enter new Phone: ");
-scanf("%s", p.phone);
-printf("Enter new Disease: ");
-scanf("%s", p.disease);
+			{
+				char buf[128];
+				/* Name */
+				printf("Enter new Name (press Enter to keep '%s'): ", p.name);
+				getInput(buf, sizeof(buf));
+				if (buf[0] != '\0')
+					strncpy(p.name, buf, sizeof(p.name));
+
+				/* Age */
+				printf("Enter new Age (press Enter to keep '%d'): ", p.age);
+				getInput(buf, sizeof(buf));
+				if (buf[0] != '\0')
+				{
+					int newAge;
+					if (sscanf(buf, "%d", &newAge) == 1)
+						p.age = newAge;
+					else
+						printf("Invalid age input. Keeping previous value.\n");
+				}
+
+				/* Gender */
+				printf("Enter new Gender (press Enter to keep '%s'): ", p.gender);
+				getInput(buf, sizeof(buf));
+				if (buf[0] != '\0')
+					strncpy(p.gender, buf, sizeof(p.gender));
+
+				/* Phone */
+				printf("Enter new Phone (press Enter to keep '%s'): ", p.phone);
+				getInput(buf, sizeof(buf));
+				if (buf[0] != '\0')
+					strncpy(p.phone, buf, sizeof(p.phone));
+
+				/* Disease */
+				printf("Enter new Disease (press Enter to keep '%s'): ", p.disease);
+				getInput(buf, sizeof(buf));
+				if (buf[0] != '\0')
+					strncpy(p.disease, buf, sizeof(p.disease));
+			}
 
 fseek(fp, -sizeof(Patient), SEEK_CUR);
 fwrite(&p, sizeof(Patient), 1, fp);
 found = 1;
+			/* Show the updated patient to the user */
+			printf("\nUpdated Patient:\n");
+			printf("ID: %d\n", p.id);
+			printf("Name: %s\n", p.name);
+			printf("Age: %d\n", p.age);
+			printf("Gender: %s\n", p.gender);
+			printf("Phone: %s\n", p.phone);
+			printf("Disease: %s\n", p.disease);
 break;
 }
 }
@@ -213,22 +255,38 @@ printf("Record not found.\n");
 
 void addDoctor()
 {
-FILE *fp = fopen(DOCTOR_FILE, "ab+");
-if (!fp)
-return;
+	Doctor d;
+	printf("Enter ID: ");
+	if (scanf("%d", &d.id) != 1)
+	{
+		while (getchar() != '\n')
+			;
+		printf("Invalid ID input.\n");
+		return;
+	}
+	/* Clear newline left by scanf("%d") before using getInput */
+	while (getchar() != '\n')
+		;
 
-Doctor d;
-printf("Enter ID: ");
-scanf("%d", &d.id);
-printf("Name: ");
-scanf("%s", d.name);
-printf("Specialization: ");
-scanf("%s", d.specialization);
-printf("Phone: ");
-scanf("%s", d.phone);
+	/* Check duplicate doctor ID */
+	if (doctorExists(d.id))
+	{
+		printf("Doctor with ID %d already exists.\n", d.id);
+		return;
+	}
 
-fwrite(&d, sizeof(Doctor), 1, fp);
-fclose(fp);
+	printf("Name: ");
+	getInput(d.name, sizeof(d.name));
+	printf("Specialization: ");
+	getInput(d.specialization, sizeof(d.specialization));
+	printf("Phone: ");
+	getInput(d.phone, sizeof(d.phone));
+
+	FILE *fp = fopen(DOCTOR_FILE, "ab+");
+	if (!fp)
+		return;
+	fwrite(&d, sizeof(Doctor), 1, fp);
+	fclose(fp);
 }
 
 void viewDoctors()
@@ -257,21 +315,41 @@ int id, found = 0;
 printf("Enter Doctor ID to update: ");
 scanf("%d", &id);
 
+	while (getchar() != '\n')
+		; // clear input buffer
+
 Doctor d;
 while (fread(&d, sizeof(Doctor), 1, fp))
 {
 if (d.id == id)
 {
-printf("Enter new Name: ");
-scanf("%s", d.name);
-printf("Enter new Specialization: ");
-scanf("%s", d.specialization);
-printf("Enter new Phone: ");
-scanf("%s", d.phone);
+			{
+				char buf[128];
+				printf("Enter new Name (press Enter to keep '%s'): ", d.name);
+				getInput(buf, sizeof(buf));
+				if (buf[0] != '\0')
+					strncpy(d.name, buf, sizeof(d.name));
+
+				printf("Enter new Specialization (press Enter to keep '%s'): ", d.specialization);
+				getInput(buf, sizeof(buf));
+				if (buf[0] != '\0')
+					strncpy(d.specialization, buf, sizeof(d.specialization));
+
+				printf("Enter new Phone (press Enter to keep '%s'): ", d.phone);
+				getInput(buf, sizeof(buf));
+				if (buf[0] != '\0')
+					strncpy(d.phone, buf, sizeof(d.phone));
+			}
 
 fseek(fp, -sizeof(Doctor), SEEK_CUR);
 fwrite(&d, sizeof(Doctor), 1, fp);
 found = 1;
+			/* Show the updated doctor to the user */
+			printf("\nUpdated Doctor:\n");
+			printf("ID: %d\n", d.id);
+			printf("Name: %s\n", d.name);
+			printf("Specialization: %s\n", d.specialization);
+			printf("Phone: %s\n", d.phone);
 break;
 }
 }
