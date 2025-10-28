@@ -390,6 +390,7 @@ void viewAppointments()
 void cancelAppointment()
 {
     printf("\n--- Cancel Appointment ---\n");
+
     int id;
     printf("Enter Appointment ID to cancel: ");
     if (scanf("%d", &id) != 1)
