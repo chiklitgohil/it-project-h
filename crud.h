@@ -35,6 +35,16 @@ typedef struct
     char status[20]; // e.g., "Scheduled", "Completed", "Cancelled"
 } Appointment;
 
+// --- New Feature: Medical Records ---
+// Stores details of a patient's diagnosis and treatment for a specific visit.
+typedef struct
+{
+    int id;
+    int appointment_id; // Links this record to a specific appointment
+    char diagnosis[100];
+    char prescription[100];
+} MedicalRecord;
+
 void addPatient();
 void viewPatients();
 void updatePatient();
@@ -49,6 +59,10 @@ void deleteDoctor();
 void scheduleAppointment();
 void viewAppointments(); // Could be filtered by doctor or patient
 void cancelAppointment();
+
+// --- Medical Record Management Functions ---
+void addMedicalRecord();
+void viewPatientMedicalHistory();
 
 // --- Helper Functions ---
 void getInput(char *buffer, int size);
