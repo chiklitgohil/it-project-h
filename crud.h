@@ -4,6 +4,7 @@
 #define PATIENT_FILE "data/patients.dat"
 #define DOCTOR_FILE "data/doctors.dat"
 #define APPOINTMENT_FILE "data/appointments.dat"
+#define MEDICAL_RECORD_FILE "data/medical_records.dat"
 
 typedef struct
 {
