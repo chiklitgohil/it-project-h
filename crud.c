@@ -204,7 +204,8 @@ if (p.id == id)
 					strncpy(p.disease, buf, sizeof(p.disease));
 			}
 
-fseek(fp, -sizeof(Patient), SEEK_CUR);
+    /* replace: fseek(fp, -sizeof(Patient), SEEK_CUR); */
+    if (fseek(fp, -(long)sizeof(Patient), SEEK_CUR) != 0) perror("fseek");
 fwrite(&p, sizeof(Patient), 1, fp);
 found = 1;
 			/* Show the updated patient to the user */
@@ -341,7 +342,8 @@ if (d.id == id)
 					strncpy(d.phone, buf, sizeof(d.phone));
 			}
 
-fseek(fp, -sizeof(Doctor), SEEK_CUR);
+    /* replace: fseek(fp, -sizeof(Doctor), SEEK_CUR); */
+    if (fseek(fp, -(long)sizeof(Doctor), SEEK_CUR) != 0) perror("fseek");
 fwrite(&d, sizeof(Doctor), 1, fp);
 found = 1;
 			/* Show the updated doctor to the user */
@@ -494,11 +496,13 @@ while (fread(&a, sizeof(Appointment), 1, fp))
 if (a.id == id)
 {
 strncpy(a.status, "Cancelled", sizeof(a.status));
-fseek(fp, -sizeof(Appointment), SEEK_CUR);
-fwrite(&a, sizeof(Appointment), 1, fp);
-found = 1;
-printf("Appointment %d cancelled.\n", id);
-break;
+                /* move file pointer back by one Appointment record (cast to signed) */
+                if (fseek(fp, -(long)sizeof(Appointment), SEEK_CUR) != 0)
+                    perror("fseek");
+                fwrite(&a, sizeof(Appointment), 1, fp);
+                found = 1;
+                printf("Appointment %d cancelled.\n", id);
+                break;
 }
 }
 fclose(fp);
@@ -548,75 +552,75 @@ printf("Medical record added with ID %d\n", r.id);
 
 void viewPatientMedicalHistory()
 {
-printf("\n--- View Patient Medical History ---\n");
-int patient_id;
-printf("Enter Patient ID: ");
-if (scanf("%d", &patient_id) != 1)
-{
-while (getchar() != '\n')
-;
-printf("Invalid input.\n");
-return;
-}
-while (getchar() != '\n')
-;
+    printf("\n--- View Patient Medical History ---\n");
+    int patient_id;
+    printf("Enter Patient ID: ");
+    if (scanf("%d", &patient_id) != 1)
+    {
+        while (getchar() != '\n')
+            ;
+        printf("Invalid input.\n");
+        return;
+    }
+    while (getchar() != '\n')
+        ;
 
-FILE *afp = fopen(APPOINTMENT_FILE, "rb");
-if (!afp)
-{
-printf("No appointments found.\n");
-return;
-}
+    FILE *afp = fopen(APPOINTMENT_FILE, "rb");
+    if (!afp)
+    {
+        printf("No appointments found.\n");
+        return;
+    }
 
-FILE *rfp = fopen(MEDICAL_RECORD_FILE, "rb");
-// rfp may be NULL if there are no records yet
+    FILE *rfp = fopen(MEDICAL_RECORD_FILE, "rb");
+    /* rfp may be NULL if there are no records yet */
 
-Appointment a;
-int foundAny = 0;
-printf("\nAppointments and Medical Records for Patient %d:\n", patient_id);
-while (fread(&a, sizeof(Appointment), 1, afp))
-{
-if (a.patient_id == patient_id)
-{
-foundAny = 1;
-printf("\nAppointment ID: %d\n", a.id);
-printf("  Doctor ID: %d\n", a.doctor_id);
-printf("  Date/Time: %s\n", a.appointment_date);
-printf("  Reason: %s\n", a.reason);
-printf("  Status: %s\n", a.status);
+    Appointment a;
+    int foundAny = 0;
+    printf("\nAppointments and Medical Records for Patient %d:\n", patient_id);
+    while (fread(&a, sizeof(Appointment), 1, afp))
+    {
+        if (a.patient_id == patient_id)
+        {
+            foundAny = 1;
+            printf("\nAppointment ID: %d\n", a.id);
+            printf("  Doctor ID: %d\n", a.doctor_id);
+            printf("  Date/Time: %s\n", a.appointment_date);
+            printf("  Reason: %s\n", a.reason);
+            printf("  Status: %s\n", a.status);
 
-if (rfp)
-{
-// Search for a medical record for this appointment
-rewind(rfp);
-MedicalRecord r;
-int recFound = 0;
-while (fread(&r, sizeof(MedicalRecord), 1, rfp))
-{
-if (r.appointment_id == a.id)
-{
-recFound = 1;
-printf("  Medical Record ID: %d\n", r.id);
-printf("    Diagnosis: %s\n", r.diagnosis);
-printf("    Prescription: %s\n", r.prescription);
-break;
-}
-}
-if (!recFound)
-printf("  No medical record for this appointment.\n");
-}
-else
-{
-printf("  No medical records file found.\n");
-}
-}
-}
+            if (rfp)
+            {
+                /* Search for a medical record for this appointment */
+                rewind(rfp);
+                MedicalRecord r;
+                int recFound = 0;
+                while (fread(&r, sizeof(MedicalRecord), 1, rfp))
+                {
+                    if (r.appointment_id == a.id)
+                    {
+                        recFound = 1;
+                        printf("  Medical Record ID: %d\n", r.id);
+                        printf("    Diagnosis: %s\n", r.diagnosis);
+                        printf("    Prescription: %s\n", r.prescription);
+                        break;
+                    }
+                }
+                if (!recFound)
+                    printf("  No medical record for this appointment.\n");
+            }
+            else
+            {
+                printf("  No medical records file found.\n");
+            }
+        }
+    }
 
-if (!foundAny)
-printf("No appointments found for patient %d.\n", patient_id);
+    if (!foundAny)
+        printf("No appointments found for patient %d.\n", patient_id);
 
-if (afp)
-fclose(afp);
-if (rfp)
-fclose(rfp);
+    if (afp)
+        fclose(afp);
+    if (rfp)
+        fclose(rfp);
 }
