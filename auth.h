@@ -9,6 +9,7 @@
 /* Credential files */
 #define USER_CRED_FILE "data/users.dat"
 #define DOCTOR_CRED_FILE "data/doctor_creds.dat" /* changed: separate file for doctor credentials */
+#define ADMIN_CRED_FILE "data/admin_creds.dat"  /* admin credentials */
 
 typedef struct Credential
 {
@@ -20,10 +21,13 @@ typedef struct Credential
 /* Authentication flows */
 int patientSignup(void);
 int doctorSignup(void);
+int adminSignup(void);
 int patientLogin(void);
 int doctorLogin(void);
+int adminLogin(void);
 void patientPortal(int patientId);
 void doctorPortal(int doctorId);
+void adminPortal(int adminId);
 
 /* Utility - clearStdin is declared in crud.h, just use it from there */
 void getInputAuth(char *buf, int size);

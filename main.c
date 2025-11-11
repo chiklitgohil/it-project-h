@@ -33,6 +33,7 @@ int main(void)
                 printf("\n-- Login --\n");
                 printf("1) Patient Login\n");
                 printf("2) Doctor Login\n");
+                printf("3) Admin Login\n");
                 printf("0) Back\n");
                 printf("Choose: ");
                 if (scanf("%d", &sub) != 1)
@@ -48,6 +49,9 @@ int main(void)
                     break;
                 case 2:
                     doctorLogin();
+                    break;
+                case 3:
+                    adminLogin();
                     break;
                 case 0:
                     break;
@@ -65,6 +69,7 @@ int main(void)
                 printf("\n-- Signup --\n");
                 printf("1) Patient Signup\n");
                 printf("2) Doctor Signup\n");
+                printf("3) Admin Signup\n");
                 printf("0) Back\n");
                 printf("Choose: ");
                 if (scanf("%d", &sub) != 1)
@@ -80,6 +85,9 @@ int main(void)
                     break;
                 case 2:
                     doctorSignup();
+                    break;
+                case 3:
+                    adminSignup();
                     break;
                 case 0:
                     break;

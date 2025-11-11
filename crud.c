@@ -17,7 +17,7 @@ void getInput(char *buffer, int size)
 }
 
 // Centralized helper: get next ID from any file
-static int getNextId(const char *filename, size_t struct_size)
+int getNextId(const char *filename, size_t struct_size)
 {
 	FILE *fp = fopen(filename, "rb");
 	if (!fp)
@@ -466,9 +466,11 @@ void cancelAppointment()
 			strcpy(a.status, "Cancelled");
 			if (fseek(fp, -(long)sizeof(Appointment), SEEK_CUR) != 0)
 				perror("fseek");
-			fwrite(&a, sizeof(Appointment), 1, fp);
+			if (fwrite(&a, sizeof(Appointment), 1, fp) != 1)
+				perror("fwrite");
+			fflush(fp);
 			found = 1;
-			printf("Appointment %d cancelled.\n", id);
+			printf("Appointment %d cancelled successfully.\n", id);
 			break;
 		}
 	}
@@ -524,6 +526,64 @@ void rescheduleAppointment()
 		printf("Appointment not found.\n");
 }
 
+// --- Assign Doctor to Patient (for Admin) ---
+void assignDoctorToPatient()
+{
+	printf("\n--- Assign Doctor to Patient ---\n");
+	int appointmentId, doctorId;
+	
+	printf("Enter Appointment ID: ");
+	scanf("%d", &appointmentId);
+	clearStdin();
+
+	if (!appointmentExists(appointmentId))
+	{
+		printf("Appointment not found.\n");
+		return;
+	}
+
+	printf("Enter Doctor ID to assign: ");
+	scanf("%d", &doctorId);
+	clearStdin();
+
+	if (!doctorExists(doctorId))
+	{
+		printf("Doctor not found.\n");
+		return;
+	}
+
+	FILE *fp = fopen(APPOINTMENT_FILE, "rb+");
+	if (!fp)
+	{
+		printf("Failed to open appointments file.\n");
+		return;
+	}
+
+	Appointment a;
+	int found = 0;
+	while (fread(&a, sizeof(Appointment), 1, fp))
+	{
+		if (a.id == appointmentId)
+		{
+			a.doctor_id = doctorId;
+			strcpy(a.status, "Scheduled");  /* Change status from Pending to Scheduled */
+			if (fseek(fp, -(long)sizeof(Appointment), SEEK_CUR) != 0)
+				perror("fseek");
+			if (fwrite(&a, sizeof(Appointment), 1, fp) != 1)
+				perror("fwrite");
+			fflush(fp);
+			found = 1;
+			printf("Doctor %d successfully assigned to appointment %d.\n", doctorId, appointmentId);
+			printf("Appointment status changed to: Scheduled\n");
+			break;
+		}
+	}
+
+	fclose(fp);
+	if (!found)
+		printf("Appointment not found.\n");
+}
+
 // --- Conflict Detection ---
 static int hasConflict(int doctorId, const char *dateTime, int excludeAppointmentId)
 {
@@ -548,42 +608,19 @@ static int hasConflict(int doctorId, const char *dateTime, int excludeAppointmen
 }
 
 // --- Enhanced Schedule Appointment with Conflict Detection ---
-void scheduleAppointmentWithConflictCheck()
+void scheduleAppointmentWithConflictCheck(int patientId)
 {
 	printf("\n--- Schedule Appointment ---\n");
 	Appointment a;
 	a.id = getNextId(APPOINTMENT_FILE, sizeof(Appointment));
-
-	printf("Enter Patient ID: ");
-	scanf("%d", &a.patient_id);
-	clearStdin();
-	if (!patientExists(a.patient_id))
-	{
-		printf("Patient not found.\n");
-		return;
-	}
-
-	printf("Enter Doctor ID: ");
-	scanf("%d", &a.doctor_id);
-	clearStdin();
-	if (!doctorExists(a.doctor_id))
-	{
-		printf("Doctor not found.\n");
-		return;
-	}
+	a.patient_id = patientId;
+	a.doctor_id = 0;  /* Doctor will be assigned by admin later */
 
 	printf("Enter appointment date/time (YYYY-MM-DD HH:MM): ");
 	getInput(a.appointment_date, sizeof(a.appointment_date));
-
-	if (hasConflict(a.doctor_id, a.appointment_date, 0))
-	{
-		printf("ERROR: Doctor already has an appointment at that time.\n");
-		return;
-	}
-
 	printf("Enter reason: ");
 	getInput(a.reason, sizeof(a.reason));
-	strcpy(a.status, "Scheduled");
+	strcpy(a.status, "Pending");  /* Changed from "Scheduled" to "Pending" until doctor is assigned */
 
 	FILE *fp = fopen(APPOINTMENT_FILE, "ab+");
 	if (!fp)
@@ -593,7 +630,7 @@ void scheduleAppointmentWithConflictCheck()
 	}
 	fwrite(&a, sizeof(Appointment), 1, fp);
 	fclose(fp);
-	printf("Appointment scheduled with ID %d\n", a.id);
+	printf("Appointment scheduled with ID %d. Doctor will be assigned by admin.\n", a.id);
 }
 
 // --- Analytics Menu ---
@@ -816,6 +853,57 @@ void viewPatientMedicalHistory()
 
 	if (records_found == 0)
 		printf("No medical records found for this patient.\n");
+
+	fclose(app_fp);
+	fclose(rec_fp);
+}
+
+/* View Doctor Reports (Medical Records) for a patient */
+void viewDoctorReports(int patientId)
+{
+	printf("\n--- Doctor Reports for Patient ID: %d ---\n", patientId);
+
+	FILE *app_fp = fopen(APPOINTMENT_FILE, "rb");
+	FILE *rec_fp = fopen(MEDICAL_RECORD_FILE, "rb");
+
+	if (!app_fp || !rec_fp)
+	{
+		printf("Error opening files.\n");
+		if (app_fp)
+			fclose(app_fp);
+		if (rec_fp)
+			fclose(rec_fp);
+		return;
+	}
+
+	Appointment app;
+	MedicalRecord rec;
+	int records_found = 0;
+
+	printf("\n%-5s %-10s %-20s %-30s %-30s\n",
+		   "ID", "Doctor ID", "Date", "Diagnosis", "Prescription");
+
+	while (fread(&app, sizeof(Appointment), 1, app_fp))
+	{
+		if (app.patient_id == patientId)
+		{
+			rewind(rec_fp);
+			while (fread(&rec, sizeof(MedicalRecord), 1, rec_fp))
+			{
+				if (rec.appointment_id == app.id)
+				{
+					printf("%-5d %-10d %-20s %-30s %-30s\n",
+						   rec.id, app.doctor_id, app.appointment_date,
+						   rec.diagnosis, rec.prescription);
+					records_found++;
+					break;
+				}
+			}
+		}
+	}
+
+	if (records_found == 0)
+		printf("No doctor reports found for this patient.\n");
 
 	fclose(app_fp);
 	fclose(rec_fp);

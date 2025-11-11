@@ -304,10 +304,9 @@ void patientPortal(int patientId)
         printf("2) Schedule Appointment\n");
         printf("3) Reschedule Appointment\n");
         printf("4) Cancel Appointment\n");
-        printf("5) View Medical History\n");
+        printf("5) View Doctor Reports\n");
         printf("6) View Your Bills\n");
-        printf("7) Search Patient by Name\n");
-        printf("8) Logout\n");
+        printf("0) Logout\n");
         printf("Choose: ");
         if (scanf("%d", &choice) != 1)
         {
@@ -322,7 +321,7 @@ void patientPortal(int patientId)
             viewPatientAppointments(patientId);
             break;
         case 2:
-            scheduleAppointmentWithConflictCheck();
+            scheduleAppointmentWithConflictCheck(patientId);
             break;
         case 3:
             rescheduleAppointment();
@@ -331,20 +330,12 @@ void patientPortal(int patientId)
             cancelAppointment();
             break;
         case 5:
-            viewPatientMedicalHistory();
+            viewDoctorReports(patientId);
             break;
         case 6:
             viewPatientBills(patientId);
             break;
-        case 7:
-        {
-            char name[50];
-            printf("Enter patient name to search: ");
-            getInputAuth(name, sizeof(name));
-            searchPatientByName(name);
-            break;
-        }
-        case 8:
+        case 0:
             printf("Logging out...\n");
             return;
         default:
@@ -361,10 +352,9 @@ void doctorPortal(int doctorId)
     {
         printf("\n=== Doctor Portal (ID: %d) ===\n", doctorId);
         printf("1) View Your Appointments\n");
-        printf("2) Add Medical Record\n");
-        printf("3) View All Appointments\n");
-        printf("4) View Analytics\n");
-        printf("5) Logout\n");
+        printf("2) Add Medical Record/Report\n");
+        printf("3) Search Patient by Name\n");
+        printf("0) Logout\n");
         printf("Choose: ");
         if (scanf("%d", &choice) != 1)
         {
@@ -382,12 +372,14 @@ void doctorPortal(int doctorId)
             addMedicalRecord();
             break;
         case 3:
-            viewAppointments();
+        {
+            char name[50];
+            printf("Enter patient name to search: ");
+            getInputAuth(name, sizeof(name));
+            searchPatientByName(name);
             break;
-        case 4:
-            analyticsMenu();
-            break;
-        case 5:
+        }
+        case 0:
             printf("Logging out...\n");
             return;
         default:
@@ -405,20 +397,9 @@ int patientSignup(void)
     Credential c = {0};
     char pwd1[64], pwd2[64];
 
-    printf("Choose numeric Patient ID: ");
-    if (scanf("%d", &c.id) != 1)
-    {
-        clearStdin();
-        printf("Invalid ID.\n");
-        return 0;
-    }
-    clearStdin();
-
-    if (idExistsInCredentials(USER_CRED_FILE, c.id) || idExistsInPatients(c.id))
-    {
-        printf("ID already in use.\n");
-        return 0;
-    }
+    /* Auto-generate Patient ID */
+    c.id = getNextId(USER_CRED_FILE, sizeof(Credential));
+    printf("Your Patient ID: %d\n", c.id);
 
     printf("Choose username: ");
     getInputAuth(c.username, sizeof(c.username));
@@ -488,21 +469,9 @@ int doctorSignup(void)
     Credential c = {0};
     char pwd1[64], pwd2[64];
 
-    printf("Choose numeric Doctor ID: ");
-    if (scanf("%d", &c.id) != 1)
-    {
-        clearStdin();
-        printf("Invalid ID.\n");
-        return 0;
-    }
-    clearStdin();
-
-    /* Check if ID already exists in DOCTOR_CRED_FILE (not DOCTOR_FILE) */
-    if (idExistsInCredentials(DOCTOR_CRED_FILE, c.id))
-    {
-        printf("ID already in use.\n");
-        return 0;
-    }
+    /* Auto-generate Doctor ID */
+    c.id = getNextId(DOCTOR_CRED_FILE, sizeof(Credential));
+    printf("Your Doctor ID: %d\n", c.id);
 
     printf("Choose username: ");
     getInputAuth(c.username, sizeof(c.username));
@@ -560,4 +529,221 @@ int doctorSignup(void)
 
     printf("Signup successful!\n");
     return 1;
+}
+
+int adminLogin(void)
+{
+    printf("\n=== Admin Login ===\n");
+    char username[64], password[64];
+    int adminId = 0;
+
+    printf("Username: ");
+    getInputAuth(username, sizeof(username));
+    printf("Password: ");
+    getInputAuth(password, sizeof(password));
+
+    if (checkCredential(ADMIN_CRED_FILE, username, password, &adminId))
+    {
+        printf("Login successful. Admin ID: %d\n", adminId);
+        adminPortal(adminId);
+        return 1;
+    }
+    else
+    {
+        printf("Invalid username/password.\n");
+        return 0;
+    }
+}
+
+int adminSignup(void)
+{
+    printf("\n=== Admin Signup ===\n");
+    Credential c = {0};
+    char pwd1[64], pwd2[64];
+
+    /* Auto-generate Admin ID */
+    c.id = getNextId(ADMIN_CRED_FILE, sizeof(Credential));
+    printf("Your Admin ID: %d\n", c.id);
+
+    printf("Choose username: ");
+    getInputAuth(c.username, sizeof(c.username));
+    if (strlen(c.username) == 0 || usernameExists(ADMIN_CRED_FILE, c.username))
+    {
+        printf("Username invalid or taken.\n");
+        return 0;
+    }
+
+    do
+    {
+        printf("Choose password (min 6 chars, letters + digits): ");
+        maskInput(pwd1, sizeof(pwd1));
+        printf("Confirm password: ");
+        maskInput(pwd2, sizeof(pwd2));
+        if (strcmp(pwd1, pwd2) != 0)
+        {
+            printf("Passwords do not match. Try again.\n");
+            continue;
+        }
+        if (!validatePassword(pwd1))
+        {
+            printf("Password does not meet policy.\n");
+            continue;
+        }
+        break;
+    } while (1);
+    strncpy(c.password, pwd1, sizeof(c.password) - 1);
+
+    if (!saveCredential(ADMIN_CRED_FILE, &c))
+    {
+        printf("Failed to save credentials.\n");
+        return 0;
+    }
+
+    printf("Signup successful!\n");
+    return 1;
+}
+
+/* Helper: View all appointments for admin */
+static void viewAllAppointmentsAdmin(void)
+{
+    printf("\n--- All Appointments ---\n");
+    FILE *fp = fopen(APPOINTMENT_FILE, "rb");
+    if (!fp)
+    {
+        printf("No appointments found.\n");
+        return;
+    }
+    Appointment a;
+    int found = 0;
+    printf("\n%-5s %-10s %-10s %-20s %-25s %-10s\n",
+           "ID", "Patient", "Doctor", "Date/Time", "Reason", "Status");
+    while (fread(&a, sizeof(Appointment), 1, fp))
+    {
+        printf("%-5d %-10d %-10d %-20s %-25s %-10s\n",
+               a.id, a.patient_id, a.doctor_id, a.appointment_date, a.reason, a.status);
+        found = 1;
+    }
+    fclose(fp);
+    if (!found)
+        printf("No appointments found.\n");
+}
+
+void adminPortal(int adminId)
+{
+    int choice = -1;
+    while (1)
+    {
+        printf("\n=== Admin Portal (ID: %d) ===\n", adminId);
+        printf("1) View All Patients\n");
+        printf("2) View All Doctors\n");
+        printf("3) Search Patient by Name\n");
+        printf("4) View All Appointments & Assign Doctor\n");
+        printf("5) View Analytics & Reports\n");
+        printf("0) Logout\n");
+        printf("Choose: ");
+        if (scanf("%d", &choice) != 1)
+        {
+            clearStdin();
+            choice = -1;
+        }
+        clearStdin();
+
+        switch (choice)
+        {
+        case 1:
+            viewPatients();
+            break;
+        case 2:
+            viewDoctors();
+            break;
+        case 3:
+        {
+            char name[50];
+            printf("Enter patient name to search: ");
+            getInputAuth(name, sizeof(name));
+            searchPatientByName(name);
+            break;
+        }
+        case 4:
+        {
+            int sub = -1;
+            while (sub != 0)
+            {
+                printf("\n--- Appointment Management ---\n");
+                printf("1) View All Appointments\n");
+                printf("2) Assign Doctor to Patient\n");
+                printf("0) Back\n");
+                printf("Choose: ");
+                if (scanf("%d", &sub) != 1)
+                {
+                    clearStdin();
+                    sub = -1;
+                }
+                clearStdin();
+                switch (sub)
+                {
+                case 1:
+                    viewAllAppointmentsAdmin();
+                    break;
+                case 2:
+                    assignDoctorToPatient();
+                    break;
+                case 0:
+                    break;
+                default:
+                    printf("Invalid choice.\n");
+                    break;
+                }
+            }
+            break;
+        }
+        case 5:
+        {
+            int sub = -1;
+            while (sub != 0)
+            {
+                printf("\n=== Analytics & Reports ===\n");
+                printf("1) Total Patients & Doctors\n");
+                printf("2) Total Appointments\n");
+                printf("3) View All Bills & Revenue\n");
+                printf("4) Doctor Appointment Count\n");
+                printf("0) Back to Menu\n");
+                printf("Choose: ");
+                if (scanf("%d", &sub) != 1)
+                {
+                    clearStdin();
+                    sub = -1;
+                }
+                clearStdin();
+                switch (sub)
+                {
+                case 1:
+                    totalPatientsAndDoctors();
+                    break;
+                case 2:
+                    totalAppointments();
+                    break;
+                case 3:
+                    viewAllBills();
+                    break;
+                case 4:
+                    doctorAppointmentCount();
+                    break;
+                case 0:
+                    break;
+                default:
+                    printf("Invalid choice.\n");
+                    break;
+                }
+            }
+            break;
+        }
+        case 0:
+            printf("Logging out...\n");
+            return;
+        default:
+            printf("Invalid choice.\n");
+            break;
+        }
+    }
 }

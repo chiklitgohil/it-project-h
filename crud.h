@@ -68,15 +68,17 @@ void updateDoctor();
 void deleteDoctor();
 
 /* Appointments */
-void scheduleAppointmentWithConflictCheck();
+void scheduleAppointmentWithConflictCheck(int patientId);
 void scheduleAppointment();
 void viewAppointments();
 void cancelAppointment();
 void rescheduleAppointment();
+void assignDoctorToPatient();
 
 /* Medical Records */
 void addMedicalRecord();
 void viewPatientMedicalHistory();
+void viewDoctorReports(int patientId);
 
 /* Billing */
 void generateBill(int appointmentId, int patientId, float amount);
@@ -95,5 +97,6 @@ void doctorAppointmentCount();
 /* Utilities */
 void getInput(char *buffer, int size);
 void clearStdin(void);
+int getNextId(const char *filename, size_t struct_size);
 
 #endif
