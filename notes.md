@@ -70,3 +70,18 @@ Screen contract (compact)
     - Error handling: redisplay the same menu with an error message on invalid input.
 
 
+admin
+
+3) View All Appointments and ability to assign doctor to patient
+4) View Analytics
+=== Analytics & Reports ===
+1) Total Patients & Doctors
+2) Total Appointments
+3) View All Bills & Revenue
+4) Doctor Appointment Count
+5) Back to Menu
+
+
+
+doctor
+search by patient name
