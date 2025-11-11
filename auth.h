@@ -7,13 +7,13 @@
 #include "crud.h"
 
 /* Credential files */
-#define USER_CRED_FILE "data/users.dat"
-#define DOCTOR_CRED_FILE "data/doctor_creds.dat" /* changed: separate file for doctor credentials */
-#define ADMIN_CRED_FILE "data/admin_creds.dat"  /* admin credentials */
+#define PATIENTS_CRED_FILE "data/patients_credentials.dat"
+#define DOCTORS_CRED_FILE "data/doctors_credentials.dat"
+#define ADMINS_CRED_FILE "data/admins_credentials.dat"
 
 typedef struct Credential
 {
-    int id; /* patient or doctor id */
+    int id; /* unified user id (same across all roles) */
     char username[64];
     char password[64]; /* stored in plain text for this simple project */
 } Credential;
@@ -28,6 +28,9 @@ int adminLogin(void);
 void patientPortal(int patientId);
 void doctorPortal(int doctorId);
 void adminPortal(int adminId);
+
+/* Migration helper: move old credential files to new names if present */
+void migrateCredentialFiles(void);
 
 /* Utility - clearStdin is declared in crud.h, just use it from there */
 void getInputAuth(char *buf, int size);

@@ -5,6 +5,39 @@
 #include <conio.h> /* getch available on Windows */
 #endif
 
+/* Migrate legacy credential filenames (if present) to the new names.
+   This helps preserve existing data after we renamed credential files.
+   Called once at program startup. */
+void migrateCredentialFiles(void)
+{
+    /* Map old -> new */
+    const char *old_new[][2] = {
+        {"data/users.dat", "data/patients_credentials.dat"},
+        {"data/doctor_creds.dat", "data/doctors_credentials.dat"},
+        {"data/admin_creds.dat", "data/admins_credentials.dat"},
+    };
+
+    for (size_t i = 0; i < sizeof(old_new) / sizeof(old_new[0]); ++i)
+    {
+        const char *oldp = old_new[i][0];
+        const char *newp = old_new[i][1];
+        FILE *fold = fopen(oldp, "rb");
+        if (fold)
+        {
+            fclose(fold);
+            /* if new file already exists, skip rename to avoid overwrite */
+            FILE *fnew = fopen(newp, "rb");
+            if (fnew)
+            {
+                fclose(fnew);
+                continue;
+            }
+            /* perform rename; if it fails, just continue */
+            rename(oldp, newp);
+        }
+    }
+}
+
 /* getInputAuth - use this for auth input, distinct from crud.getInput */
 void getInputAuth(char *buf, int size)
 {
@@ -200,7 +233,7 @@ int patientLogin(void)
     printf("Password: ");
     getInputAuth(password, sizeof(password));
 
-    if (checkCredential(USER_CRED_FILE, username, password, &patientId))
+    if (checkCredential(PATIENTS_CRED_FILE, username, password, &patientId))
     {
         printf("Login successful. Patient ID: %d\n", patientId);
         patientPortal(patientId);
@@ -224,7 +257,7 @@ int doctorLogin(void)
     printf("Password: ");
     getInputAuth(password, sizeof(password));
 
-    if (checkCredential(DOCTOR_CRED_FILE, username, password, &doctorId))
+    if (checkCredential(DOCTORS_CRED_FILE, username, password, &doctorId))
     {
         printf("Login successful. Doctor ID: %d\n", doctorId);
         doctorPortal(doctorId);
@@ -398,12 +431,12 @@ int patientSignup(void)
     char pwd1[64], pwd2[64];
 
     /* Auto-generate Patient ID */
-    c.id = getNextId(USER_CRED_FILE, sizeof(Credential));
+    c.id = getNextId(PATIENTS_CRED_FILE, sizeof(Credential));
     printf("Your Patient ID: %d\n", c.id);
 
     printf("Choose username: ");
     getInputAuth(c.username, sizeof(c.username));
-    if (strlen(c.username) == 0 || usernameExists(USER_CRED_FILE, c.username))
+    if (strlen(c.username) == 0 || usernameExists(PATIENTS_CRED_FILE, c.username))
     {
         printf("Username invalid or taken.\n");
         return 0;
@@ -450,10 +483,16 @@ int patientSignup(void)
         perror("Failed to open patient file");
         return 0;
     }
-    fwrite(&p, sizeof(Patient), 1, pf);
+    if (fwrite(&p, sizeof(Patient), 1, pf) != 1)
+    {
+        perror("Failed to write patient profile");
+        fclose(pf);
+        return 0;
+    }
+    fflush(pf);
     fclose(pf);
 
-    if (!saveCredential(USER_CRED_FILE, &c))
+    if (!saveCredential(PATIENTS_CRED_FILE, &c))
     {
         printf("Failed to save credentials.\n");
         return 0;
@@ -470,12 +509,12 @@ int doctorSignup(void)
     char pwd1[64], pwd2[64];
 
     /* Auto-generate Doctor ID */
-    c.id = getNextId(DOCTOR_CRED_FILE, sizeof(Credential));
+    c.id = getNextId(DOCTORS_CRED_FILE, sizeof(Credential));
     printf("Your Doctor ID: %d\n", c.id);
 
     printf("Choose username: ");
     getInputAuth(c.username, sizeof(c.username));
-    if (strlen(c.username) == 0 || usernameExists(DOCTOR_CRED_FILE, c.username))
+    if (strlen(c.username) == 0 || usernameExists(DOCTORS_CRED_FILE, c.username))
     {
         printf("Username invalid or taken.\n");
         return 0;
@@ -517,11 +556,17 @@ int doctorSignup(void)
         perror("Failed to open doctor file");
         return 0;
     }
-    fwrite(&d, sizeof(Doctor), 1, df);
+    if (fwrite(&d, sizeof(Doctor), 1, df) != 1)
+    {
+        perror("Failed to write doctor profile");
+        fclose(df);
+        return 0;
+    }
+    fflush(df);
     fclose(df);
 
-    /* Save to DOCTOR_CRED_FILE, not USER_CRED_FILE */
-    if (!saveCredential(DOCTOR_CRED_FILE, &c))
+    /* Save to DOCTORS_CRED_FILE */
+    if (!saveCredential(DOCTORS_CRED_FILE, &c))
     {
         printf("Failed to save credentials.\n");
         return 0;
@@ -542,7 +587,7 @@ int adminLogin(void)
     printf("Password: ");
     getInputAuth(password, sizeof(password));
 
-    if (checkCredential(ADMIN_CRED_FILE, username, password, &adminId))
+    if (checkCredential(ADMINS_CRED_FILE, username, password, &adminId))
     {
         printf("Login successful. Admin ID: %d\n", adminId);
         adminPortal(adminId);
@@ -562,12 +607,12 @@ int adminSignup(void)
     char pwd1[64], pwd2[64];
 
     /* Auto-generate Admin ID */
-    c.id = getNextId(ADMIN_CRED_FILE, sizeof(Credential));
+    c.id = getNextId(ADMINS_CRED_FILE, sizeof(Credential));
     printf("Your Admin ID: %d\n", c.id);
 
     printf("Choose username: ");
     getInputAuth(c.username, sizeof(c.username));
-    if (strlen(c.username) == 0 || usernameExists(ADMIN_CRED_FILE, c.username))
+    if (strlen(c.username) == 0 || usernameExists(ADMINS_CRED_FILE, c.username))
     {
         printf("Username invalid or taken.\n");
         return 0;
@@ -593,7 +638,7 @@ int adminSignup(void)
     } while (1);
     strncpy(c.password, pwd1, sizeof(c.password) - 1);
 
-    if (!saveCredential(ADMIN_CRED_FILE, &c))
+    if (!saveCredential(ADMINS_CRED_FILE, &c))
     {
         printf("Failed to save credentials.\n");
         return 0;

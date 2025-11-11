@@ -1,74 +1,160 @@
+/*
+ * CRUD Operations for Hospital Management System
+ * This file contains all Create, Read, Update, Delete operations for:
+ * - Patients and Doctors (profiles)
+ * - Appointments
+ * - Medical Records
+ * - Bills
+ * - Search and Analytics functions
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include "crud.h"
 
+/* Clear the input buffer (stdin) of any remaining characters after scanf()
+   This prevents leftover newlines from affecting the next input operation */
 void clearStdin(void)
 {
 	int c;
 	while ((c = getchar()) != '\n' && c != EOF)
-		;
+		;  /* Keep reading until we hit a newline or end-of-file */
 }
 
+/* Read a single line of input from the user and remove the trailing newline
+   This is safer than scanf for reading strings with spaces */
 void getInput(char *buffer, int size)
 {
 	fgets(buffer, size, stdin);
+	/* Remove the newline character that fgets includes */
 	buffer[strcspn(buffer, "\n")] = 0;
 }
 
-// Centralized helper: get next ID from any file
+/*
+ * FUNCTION: getNextId - Generate the next unique ID for any record type
+ * 
+ * PARAMETERS:
+ *   - filename: Path to the data file (e.g., "data/patients.dat")
+ *   - struct_size: Size of the record struct (e.g., sizeof(Patient))
+ * 
+ * RETURNS: Next available ID (max_id + 1)
+ * 
+ * HOW IT WORKS:
+ *   1. Opens the file and scans it record-by-record
+ *   2. Extracts the ID from each record (first 4 bytes = int id)
+ *   3. Validates that the ID is plausible (between 1-100000)
+ *   4. For credential records, additionally validates that username is text
+ *   5. Tracks the maximum ID found and returns max_id + 1
+ * 
+ * WHY THIS VALIDATION:
+ *   - Old/corrupted binary files might contain garbage data
+ *   - Without validation, we could pick absurdly large IDs from mixed files
+ *   - Validation filters out non-sensible records before accepting their IDs
+ */
 int getNextId(const char *filename, size_t struct_size)
 {
 	FILE *fp = fopen(filename, "rb");
 	if (!fp)
-		return 1;
-	fseek(fp, 0, SEEK_END);
-	long size = ftell(fp);
+		return 1;  /* File doesn't exist yet, start with ID 1 */
+
+	int max_id = 0;
+	void *buf = malloc(struct_size);
+	if (!buf)
+	{
+		fclose(fp);
+		return 1;  /* Allocation failed, default to ID 1 */
+	}
+
+	/* Read and process each record in the file */
+	while (fread(buf, struct_size, 1, fp) == 1)
+	{
+		int rec_id = 0;
+		/* Extract the ID from the first 4 bytes of the record */
+		memcpy(&rec_id, buf, sizeof(int));
+
+		/* Basic sanity checks to avoid picking up garbage ids from mixed files */
+		int plausible = 1;
+
+		/* Reject IDs that are invalid or too large (impossible ranges) */
+		if (rec_id <= 0 || rec_id > 100000)
+			plausible = 0;
+
+		/*
+		 * Additional validation for Credential-like records:
+		 * If this file stores credentials (identified by matching struct size),
+		 * check that the username field contains printable characters and
+		 * is properly null-terminated. This filters out many false positives.
+		 */
+		if (plausible && struct_size == sizeof(struct { int id; char username[64]; char password[64]; }))
+		{
+			char username_check[65];
+			/* Copy the username bytes (after the id) from the record buffer */
+			memcpy(username_check, ((char *)buf) + sizeof(int), 64);
+			username_check[64] = '\0';
+
+			/* Validate that the username field looks like text */
+			int seen_print = 0, has_nul = 0;
+			for (int i = 0; i < 64; ++i)
+			{
+				unsigned char ch = (unsigned char)username_check[i];
+				if (ch == '\0') { has_nul = 1; break; }  /* Found null terminator */
+				if (isprint(ch)) seen_print = 1;  /* Found at least one printable char */
+			}
+			/* Reject if username is not proper text (missing NUL or no printable chars) */
+			if (!has_nul || !seen_print)
+				plausible = 0;
+		}
+
+		/* If this record passed validation and has a larger ID, track it */
+		if (plausible && rec_id > max_id)
+			max_id = rec_id;
+	}
+
+	free(buf);
 	fclose(fp);
-	return (size / struct_size) + 1;
+	return max_id + 1;  /* Return the next available ID */
 }
 
+/* ============================================================================
+   PATIENT DATABASE OPERATIONS
+   ============================================================================ */
+
+/* Check if a patient with the given ID exists in the database */
 static int patientExists(int id)
 {
 	FILE *fp = fopen(PATIENT_FILE, "rb");
 	if (!fp)
-		return 0;
+		return 0;  /* File doesn't exist, so patient doesn't exist */
+
 	Patient p;
+	/* Scan through all patient records looking for a match */
 	while (fread(&p, sizeof(Patient), 1, fp))
 	{
 		if (p.id == id)
 		{
 			fclose(fp);
-			return 1;
+			return 1;  /* Found the patient */
 		}
 	}
 	fclose(fp);
-	return 0;
+	return 0;  /* Patient not found */
 }
 
-/*  REPLACED implementation:
-static int doctorExists(int id)
-{
-	FILE *fp = fopen(DOCTOR_FILE, "rb");
-	if (!fp)
-		return 0;
-	Doctor d;
-	while (fread(&d, sizeof(Doctor), 1, fp))
-	{
-		if (d.id == id)
-		{
-			fclose(fp);
-			return 1;
-		}
-	}
-	fclose(fp);
-	return 0;
-}
-*/
+/* ============================================================================
+   DOCTOR DATABASE OPERATIONS
+   ============================================================================ */
 
+/*
+ * Check if a doctor with the given ID exists in the database.
+ * This function checks TWO places:
+ * 1. Doctor profiles file (doctors.dat) - main location
+ * 2. Doctor credentials file (doctors_credentials.dat) - fallback for legacy data
+ */
 static int doctorExists(int id)
 {
-	/* 1) Check doctor profiles file first (normal case) */
+	/* First, check the main doctor profiles file */
 	FILE *fp = fopen(DOCTOR_FILE, "rb");
 	if (fp)
 	{
@@ -78,20 +164,22 @@ static int doctorExists(int id)
 			if (d.id == id)
 			{
 				fclose(fp);
-				return 1;
+				return 1;  /* Found in doctor profiles */
 			}
 		}
 		fclose(fp);
 	}
 
-	/* 2) Fallback: check doctor credentials file in case credentials were
-	   previously written to a different file. We can't include auth.h here
-	   (circular include), so read the file using a local struct matching
-	   the Credential layout. */
-	const char *cred_path = "data/doctor_creds.dat"; /* must match auth.h's DOCTOR_CRED_FILE */
+	/*
+	 * Fallback: check doctor credentials file in case data was migrated
+	 * or stored in a different location. We use a local struct instead of
+	 * including auth.h to avoid circular dependencies.
+	 */
+	const char *cred_path = "data/doctors_credentials.dat";
 	FILE *cf = fopen(cred_path, "rb");
 	if (cf)
 	{
+		/* Local struct matching the Credential layout without circular include */
 		struct
 		{
 			int id;
@@ -103,20 +191,26 @@ static int doctorExists(int id)
 			if (cred.id == id)
 			{
 				fclose(cf);
-				return 1;
+				return 1;  /* Found in credentials file */
 			}
 		}
 		fclose(cf);
 	}
 
-	return 0;
+	return 0;  /* Doctor not found in either location */
 }
 
+/* ============================================================================
+   APPOINTMENT DATABASE OPERATIONS
+   ============================================================================ */
+
+/* Check if an appointment with the given ID exists in the database */
 static int appointmentExists(int id)
 {
 	FILE *fp = fopen(APPOINTMENT_FILE, "rb");
 	if (!fp)
 		return 0;
+
 	Appointment a;
 	while (fread(&a, sizeof(Appointment), 1, fp))
 	{
@@ -130,6 +224,10 @@ static int appointmentExists(int id)
 	return 0;
 }
 
+/*
+ * Add a new patient to the database (manual entry - not used in signup flow)
+ * This is for admin to manually add patients via a menu option
+ */
 void addPatient()
 {
 	FILE *fp = fopen(PATIENT_FILE, "ab+");
@@ -140,25 +238,34 @@ void addPatient()
 	}
 
 	Patient p;
+	/* Collect patient information from user input */
 	printf("Enter ID: ");
 	scanf("%d", &p.id);
-	clearStdin();
+	clearStdin();  /* Clear leftover newline from scanf */
+	
 	printf("Name: ");
 	getInput(p.name, sizeof(p.name));
+	
 	printf("Age: ");
 	scanf("%d", &p.age);
 	clearStdin();
+	
 	printf("Gender: ");
 	getInput(p.gender, sizeof(p.gender));
+	
 	printf("Phone: ");
 	getInput(p.phone, sizeof(p.phone));
+	
 	printf("Disease: ");
 	getInput(p.disease, sizeof(p.disease));
 
+	/* Write the patient struct to the file */
 	fwrite(&p, sizeof(Patient), 1, fp);
 	fclose(fp);
 }
 
+/* Display all patients in a formatted table
+   Shows: ID, Name, Age, Gender, Phone, Disease */
 void viewPatients()
 {
 	FILE *fp = fopen(PATIENT_FILE, "rb");
@@ -166,8 +273,11 @@ void viewPatients()
 		return;
 
 	Patient p;
+	/* Print table header with column width specifiers */
 	printf("\n%-5s %-15s %-5s %-10s %-15s %-20s\n",
 		   "ID", "Name", "Age", "Gender", "Phone", "Disease");
+	
+	/* Read and print each patient record */
 	while (fread(&p, sizeof(Patient), 1, fp))
 		printf("%-5d %-15s %-5d %-10s %-15s %-20s\n",
 			   p.id, p.name, p.age, p.gender, p.phone, p.disease);
@@ -175,6 +285,9 @@ void viewPatients()
 	fclose(fp);
 }
 
+/* Update an existing patient's information
+   Allows editing: Name, Age, Gender, Phone, Disease
+   Press Enter to skip a field and keep the current value */
 void updatePatient()
 {
 	FILE *fp = fopen(PATIENT_FILE, "rb+");
@@ -191,6 +304,7 @@ void updatePatient()
 	{
 		if (p.id == id)
 		{
+			/* Prompt user to update each field - enter skips the field */
 			char buf[128];
 			printf("Enter new Name (press Enter to keep '%s'): ", p.name);
 			getInput(buf, sizeof(buf));
@@ -221,6 +335,7 @@ void updatePatient()
 			if (buf[0] != '\0')
 				strncpy(p.disease, buf, sizeof(p.disease));
 
+			/* Move file pointer back one record and overwrite the old patient data */
 			if (fseek(fp, -(long)sizeof(Patient), SEEK_CUR) != 0)
 				perror("fseek");
 			fwrite(&p, sizeof(Patient), 1, fp);
@@ -235,6 +350,9 @@ void updatePatient()
 		printf("Record not found.\n");
 }
 
+/* Delete a patient from the database by ID
+   Creates a temporary file with all patients except the one to delete,
+   then replaces the original file with the temp file */
 void deletePatient()
 {
 	FILE *fp = fopen(PATIENT_FILE, "rb");
@@ -247,16 +365,19 @@ void deletePatient()
 	scanf("%d", &id);
 
 	Patient p;
+	/* Copy all patients except the one with matching ID to temp file */
 	while (fread(&p, sizeof(Patient), 1, fp))
 	{
 		if (p.id != id)
 			fwrite(&p, sizeof(Patient), 1, temp);
 		else
-			found = 1;
+			found = 1;  /* Mark that we found and skipped the target patient */
 	}
 
 	fclose(fp);
 	fclose(temp);
+	
+	/* Replace original file with temp file (effectively deleting the record) */
 	remove(PATIENT_FILE);
 	rename("data/temp.dat", PATIENT_FILE);
 
@@ -264,6 +385,10 @@ void deletePatient()
 		printf("Record not found.\n");
 }
 
+/*
+ * Add a new doctor to the database (manual entry - not used in signup flow)
+ * Used by admins to manually add doctors via a menu option
+ */
 void addDoctor()
 {
 	Doctor d;
@@ -271,12 +396,14 @@ void addDoctor()
 	scanf("%d", &d.id);
 	clearStdin();
 
+	/* Check if doctor with this ID already exists */
 	if (doctorExists(d.id))
 	{
 		printf("Doctor with ID %d already exists.\n", d.id);
 		return;
 	}
 
+	/* Collect doctor information */
 	printf("Name: ");
 	getInput(d.name, sizeof(d.name));
 	printf("Specialization: ");
@@ -284,6 +411,7 @@ void addDoctor()
 	printf("Phone: ");
 	getInput(d.phone, sizeof(d.phone));
 
+	/* Write doctor record to file */
 	FILE *fp = fopen(DOCTOR_FILE, "ab+");
 	if (!fp)
 		return;
@@ -291,6 +419,8 @@ void addDoctor()
 	fclose(fp);
 }
 
+/* Display all doctors in a formatted table
+   Shows: ID, Name, Specialization, Phone */
 void viewDoctors()
 {
 	FILE *fp = fopen(DOCTOR_FILE, "rb");
@@ -298,8 +428,11 @@ void viewDoctors()
 		return;
 
 	Doctor d;
+	/* Print table header */
 	printf("\n%-5s %-15s %-20s %-15s\n",
 		   "ID", "Name", "Specialization", "Phone");
+	
+	/* Read and print each doctor record */
 	while (fread(&d, sizeof(Doctor), 1, fp))
 		printf("%-5d %-15s %-20s %-15s\n",
 			   d.id, d.name, d.specialization, d.phone);
@@ -443,6 +576,8 @@ void viewAppointments()
 	fclose(fp);
 }
 
+/* Cancel an existing appointment by setting its status to "Cancelled"
+   The appointment record remains in the database but is marked as cancelled */
 void cancelAppointment()
 {
 	printf("\n--- Cancel Appointment ---\n");
@@ -457,18 +592,21 @@ void cancelAppointment()
 		printf("No appointments found.\n");
 		return;
 	}
+	
 	Appointment a;
 	int found = 0;
 	while (fread(&a, sizeof(Appointment), 1, fp))
 	{
 		if (a.id == id)
 		{
-			strcpy(a.status, "Cancelled");
+			strcpy(a.status, "Cancelled");  /* Mark appointment as cancelled */
+			
+			/* Move file pointer back one record and overwrite with updated appointment */
 			if (fseek(fp, -(long)sizeof(Appointment), SEEK_CUR) != 0)
 				perror("fseek");
 			if (fwrite(&a, sizeof(Appointment), 1, fp) != 1)
 				perror("fwrite");
-			fflush(fp);
+			fflush(fp);  /* Ensure data is written to disk immediately */
 			found = 1;
 			printf("Appointment %d cancelled successfully.\n", id);
 			break;
@@ -526,7 +664,15 @@ void rescheduleAppointment()
 		printf("Appointment not found.\n");
 }
 
-// --- Assign Doctor to Patient (for Admin) ---
+/*
+ * Admin function: Assign a doctor to a pending appointment
+ * 
+ * WORKFLOW:
+ * 1. Admin enters the appointment ID (currently pending)
+ * 2. Admin enters the doctor ID to assign
+ * 3. System updates appointment with doctor_id and changes status to "Scheduled"
+ * 4. Changes are immediately flushed to disk for persistence
+ */
 void assignDoctorToPatient()
 {
 	printf("\n--- Assign Doctor to Patient ---\n");
@@ -567,11 +713,13 @@ void assignDoctorToPatient()
 		{
 			a.doctor_id = doctorId;
 			strcpy(a.status, "Scheduled");  /* Change status from Pending to Scheduled */
+			
+			/* Move file pointer back one record and overwrite with updated appointment */
 			if (fseek(fp, -(long)sizeof(Appointment), SEEK_CUR) != 0)
 				perror("fseek");
 			if (fwrite(&a, sizeof(Appointment), 1, fp) != 1)
 				perror("fwrite");
-			fflush(fp);
+			fflush(fp);  /* Ensure disk write immediately */
 			found = 1;
 			printf("Doctor %d successfully assigned to appointment %d.\n", doctorId, appointmentId);
 			printf("Appointment status changed to: Scheduled\n");
@@ -607,7 +755,20 @@ static int hasConflict(int doctorId, const char *dateTime, int excludeAppointmen
 	return 0;
 }
 
-// --- Enhanced Schedule Appointment with Conflict Detection ---
+/* ============================================================================
+   APPOINTMENT MANAGEMENT FUNCTIONS
+   ============================================================================ */
+
+/*
+ * Enhanced appointment scheduling with conflict detection
+ * Called by PATIENTS when booking appointments
+ * 
+ * FLOW:
+ * 1. Patient enters appointment date/time and reason
+ * 2. System auto-generates an ID and sets status to "Pending"
+ * 3. Doctor ID is initially set to 0 (not assigned yet)
+ * 4. Admin will later assign a specific doctor to this appointment
+ */
 void scheduleAppointmentWithConflictCheck(int patientId)
 {
 	printf("\n--- Schedule Appointment ---\n");
@@ -620,7 +781,7 @@ void scheduleAppointmentWithConflictCheck(int patientId)
 	getInput(a.appointment_date, sizeof(a.appointment_date));
 	printf("Enter reason: ");
 	getInput(a.reason, sizeof(a.reason));
-	strcpy(a.status, "Pending");  /* Changed from "Scheduled" to "Pending" until doctor is assigned */
+	strcpy(a.status, "Pending");  /* Status is Pending until doctor is assigned */
 
 	FILE *fp = fopen(APPOINTMENT_FILE, "ab+");
 	if (!fp)
