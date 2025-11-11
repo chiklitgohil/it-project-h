@@ -8,7 +8,7 @@
 
 /* Credential files */
 #define USER_CRED_FILE "data/users.dat"
-#define DOCTOR_CRED_FILE "data/doctors.dat"
+#define DOCTOR_CRED_FILE "data/doctor_creds.dat" /* changed: separate file for doctor credentials */
 
 typedef struct Credential
 {
