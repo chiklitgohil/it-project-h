@@ -46,6 +46,7 @@ static int patientExists(int id)
 	return 0;
 }
 
+/*  REPLACED implementation:
 static int doctorExists(int id)
 {
 	FILE *fp = fopen(DOCTOR_FILE, "rb");
@@ -61,6 +62,53 @@ static int doctorExists(int id)
 		}
 	}
 	fclose(fp);
+	return 0;
+}
+*/
+
+static int doctorExists(int id)
+{
+	/* 1) Check doctor profiles file first (normal case) */
+	FILE *fp = fopen(DOCTOR_FILE, "rb");
+	if (fp)
+	{
+		Doctor d;
+		while (fread(&d, sizeof(Doctor), 1, fp))
+		{
+			if (d.id == id)
+			{
+				fclose(fp);
+				return 1;
+			}
+		}
+		fclose(fp);
+	}
+
+	/* 2) Fallback: check doctor credentials file in case credentials were
+	   previously written to a different file. We can't include auth.h here
+	   (circular include), so read the file using a local struct matching
+	   the Credential layout. */
+	const char *cred_path = "data/doctor_creds.dat"; /* must match auth.h's DOCTOR_CRED_FILE */
+	FILE *cf = fopen(cred_path, "rb");
+	if (cf)
+	{
+		struct
+		{
+			int id;
+			char username[64];
+			char password[64];
+		} cred;
+		while (fread(&cred, sizeof(cred), 1, cf))
+		{
+			if (cred.id == id)
+			{
+				fclose(cf);
+				return 1;
+			}
+		}
+		fclose(cf);
+	}
+
 	return 0;
 }
 
@@ -681,8 +729,6 @@ void doctorAppointmentCount()
 	fclose(ap);
 	printf("Doctor ID %d has %d active appointments.\n", doctorId, count);
 }
-
-// ...existing code...
 
 // --- Medical Records ---
 void addMedicalRecord()
