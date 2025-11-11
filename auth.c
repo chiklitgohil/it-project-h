@@ -5,14 +5,7 @@
 #include <conio.h> /* getch available on Windows */
 #endif
 
-/* Helpers */
-void clearStdin(void)
-{
-    int c;
-    while ((c = getchar()) != '\n' && c != EOF)
-        ;
-}
-
+/* getInputAuth - use this for auth input, distinct from crud.getInput */
 void getInputAuth(char *buf, int size)
 {
     if (!fgets(buf, size, stdin))
@@ -47,34 +40,7 @@ int validatePassword(const char *pwd)
    - On other platforms: fallback to visible input via fgets (simple, portable). */
 void maskInput(char *buf, int size)
 {
-    int idx = 0;
-#if defined(_WIN32) || defined(_WIN64)
-    int ch;
-    while (idx < size - 1)
-    {
-        ch = _getch();
-        if (ch == '\r' || ch == '\n')
-        {
-            putchar('\n');
-            break;
-        }
-        if (ch == 127 || ch == 8)
-        { /* backspace */
-            if (idx > 0)
-            {
-                idx--;
-                fputs("\b \b", stdout);
-            }
-            continue;
-        }
-        buf[idx++] = (char)ch;
-        putchar('*');
-    }
-    buf[idx] = '\0';
-#else
-    /* Fallback: visible input. Keep user experience simple and portable. */
     getInputAuth(buf, size);
-#endif
 }
 
 /* Credential file helpers */
@@ -151,10 +117,10 @@ static int idExistsInDoctors(int id)
     return 0;
 }
 
-/* Save credential */
+/* Save credential - FIXED */
 static int saveCredential(const char *file, const Credential *c)
 {
-/* Ensure data directory exists */
+    /* Ensure data directory exists */
 #if defined(_WIN32) || defined(_WIN64)
     system("if not exist data mkdir data");
 #else
@@ -164,16 +130,20 @@ static int saveCredential(const char *file, const Credential *c)
     FILE *fp = fopen(file, "ab");
     if (!fp)
     {
-        printf("Failed to open credential file: %s\n", file);
+        perror("Failed to open credential file");
         return 0;
     }
-    size_t written = fwrite(c, sizeof(*c), 1, fp);
+
+    size_t written = fwrite(c, sizeof(Credential), 1, fp);
     fclose(fp);
+
     if (written != 1)
     {
-        printf("Failed to write credential\n");
+        printf("[ERROR] Failed to write credential to file.\n");
         return 0;
     }
+
+    printf("[SUCCESS] Credential saved to %s\n", file);
     return 1;
 }
 
@@ -183,32 +153,31 @@ static int checkCredential(const char *file, const char *username, const char *p
     FILE *fp = fopen(file, "rb");
     if (!fp)
     {
-        printf("Warning: No credential file found at %s\n", file);
+        printf("[ERROR] Credential file not found: %s\n", file);
         return 0;
     }
 
     Credential c;
-    size_t read;
     int found = 0;
 
-    while ((read = fread(&c, sizeof(c), 1, fp)) == 1)
+    while (fread(&c, sizeof(Credential), 1, fp))
     {
         if (strcmp(c.username, username) == 0)
         {
             found = 1;
             if (strcmp(c.password, password) == 0)
             {
-                if (outId)
-                    *outId = c.id;
+                *outId = c.id;
                 fclose(fp);
                 return 1;
             }
-            /* Username found but wrong password */
+            /* Username found but password wrong */
             break;
         }
     }
 
     fclose(fp);
+
     if (!found)
     {
         printf("Username not found.\n");
@@ -220,50 +189,211 @@ static int checkCredential(const char *file, const char *username, const char *p
     return 0;
 }
 
-/* Small UI helpers */
-static void printBoxed(const char *title)
+int patientLogin(void)
 {
-    int len = (int)strlen(title) + 4;
-    for (int i = 0; i < len; ++i)
-        putchar('*');
-    putchar('\n');
-    printf("* %s *\n", title);
-    for (int i = 0; i < len; ++i)
-        putchar('*');
-    putchar('\n');
+    printf("\n=== Patient Login ===\n");
+    char username[64], password[64];
+    int patientId = 0;
+
+    printf("Username: ");
+    getInputAuth(username, sizeof(username));
+    printf("Password: ");
+    getInputAuth(password, sizeof(password));
+
+    if (checkCredential(USER_CRED_FILE, username, password, &patientId))
+    {
+        printf("Login successful. Patient ID: %d\n", patientId);
+        patientPortal(patientId);
+        return 1;
+    }
+    else
+    {
+        printf("Invalid username/password.\n");
+        return 0;
+    }
 }
 
-/* lightweight screen clear (portable) */
-static void clearScreen(void)
+int doctorLogin(void)
 {
-    for (int i = 0; i < 40; ++i)
-        putchar('\n');
+    printf("\n=== Doctor Login ===\n");
+    char username[64], password[64];
+    int doctorId = 0;
+
+    printf("Username: ");
+    getInputAuth(username, sizeof(username));
+    printf("Password: ");
+    getInputAuth(password, sizeof(password));
+
+    if (checkCredential(DOCTOR_CRED_FILE, username, password, &doctorId))
+    {
+        printf("Login successful. Doctor ID: %d\n", doctorId);
+        doctorPortal(doctorId);
+        return 1;
+    }
+    else
+    {
+        printf("Invalid username/password.\n");
+        return 0;
+    }
 }
 
-/* breadcrumb header */
-static void showBreadcrumb(const char *role, int id, const char *section)
+/* Helper: view appointments for a specific patient */
+static void viewPatientAppointments(int patientId)
 {
-    printBoxed(" Portal ");
-    printf("%s > ID:%d > %s\n", role, id, section ? section : "Home");
-    putchar('-');
-    for (int i = 0; i < 50; i++)
-        putchar('-');
-    putchar('\n');
+    printf("\n--- Your Appointments ---\n");
+    FILE *fp = fopen(APPOINTMENT_FILE, "rb");
+    if (!fp)
+    {
+        printf("No appointments found.\n");
+        return;
+    }
+    Appointment a;
+    int found = 0;
+    printf("\n%-5s %-10s %-20s %-25s %-10s\n",
+           "ID", "Doctor", "Date/Time", "Reason", "Status");
+    while (fread(&a, sizeof(Appointment), 1, fp))
+    {
+        if (a.patient_id == patientId)
+        {
+            printf("%-5d %-10d %-20s %-25s %-10s\n",
+                   a.id, a.doctor_id, a.appointment_date, a.reason, a.status);
+            found = 1;
+        }
+    }
+    fclose(fp);
+    if (!found)
+        printf("No appointments found.\n");
 }
 
-/* yes/no confirmation helper */
-static int confirmYesNo(const char *prompt)
+/* Helper: view appointments for a specific doctor */
+static void viewDoctorAppointments(int doctorId)
 {
-    char ans[8];
+    printf("\n--- Your Appointments ---\n");
+    FILE *fp = fopen(APPOINTMENT_FILE, "rb");
+    if (!fp)
+    {
+        printf("No appointments found.\n");
+        return;
+    }
+    Appointment a;
+    int found = 0;
+    printf("\n%-5s %-10s %-20s %-25s %-10s\n",
+           "ID", "Patient", "Date/Time", "Reason", "Status");
+    while (fread(&a, sizeof(Appointment), 1, fp))
+    {
+        if (a.doctor_id == doctorId)
+        {
+            printf("%-5d %-10d %-20s %-25s %-10s\n",
+                   a.id, a.patient_id, a.appointment_date, a.reason, a.status);
+            found = 1;
+        }
+    }
+    fclose(fp);
+    if (!found)
+        printf("No appointments found.\n");
+}
+
+/* Simplified portals - remove UI extras, keep core functionality */
+void patientPortal(int patientId)
+{
+    int choice = -1;
     while (1)
     {
-        printf("%s (y/n): ", prompt);
-        getInputAuth(ans, sizeof(ans));
-        if (ans[0] == 'y' || ans[0] == 'Y')
-            return 1;
-        if (ans[0] == 'n' || ans[0] == 'N')
-            return 0;
-        printf("Please answer y or n.\n");
+        printf("\n=== Patient Portal (ID: %d) ===\n", patientId);
+        printf("1) View Your Appointments\n");
+        printf("2) Schedule Appointment\n");
+        printf("3) Reschedule Appointment\n");
+        printf("4) Cancel Appointment\n");
+        printf("5) View Medical History\n");
+        printf("6) View Your Bills\n");
+        printf("7) Search Patient by Name\n");
+        printf("8) Logout\n");
+        printf("Choose: ");
+        if (scanf("%d", &choice) != 1)
+        {
+            clearStdin();
+            choice = -1;
+        }
+        clearStdin();
+
+        switch (choice)
+        {
+        case 1:
+            viewPatientAppointments(patientId);
+            break;
+        case 2:
+            scheduleAppointmentWithConflictCheck();
+            break;
+        case 3:
+            rescheduleAppointment();
+            break;
+        case 4:
+            cancelAppointment();
+            break;
+        case 5:
+            viewPatientMedicalHistory();
+            break;
+        case 6:
+            viewPatientBills(patientId);
+            break;
+        case 7:
+        {
+            char name[50];
+            printf("Enter patient name to search: ");
+            getInputAuth(name, sizeof(name));
+            searchPatientByName(name);
+            break;
+        }
+        case 8:
+            printf("Logging out...\n");
+            return;
+        default:
+            printf("Invalid choice.\n");
+            break;
+        }
+    }
+}
+
+void doctorPortal(int doctorId)
+{
+    int choice = -1;
+    while (1)
+    {
+        printf("\n=== Doctor Portal (ID: %d) ===\n", doctorId);
+        printf("1) View Your Appointments\n");
+        printf("2) Add Medical Record\n");
+        printf("3) View All Appointments\n");
+        printf("4) View Analytics\n");
+        printf("5) Logout\n");
+        printf("Choose: ");
+        if (scanf("%d", &choice) != 1)
+        {
+            clearStdin();
+            choice = -1;
+        }
+        clearStdin();
+
+        switch (choice)
+        {
+        case 1:
+            viewDoctorAppointments(doctorId);
+            break;
+        case 2:
+            addMedicalRecord();
+            break;
+        case 3:
+            viewAppointments();
+            break;
+        case 4:
+            analyticsMenu();
+            break;
+        case 5:
+            printf("Logging out...\n");
+            return;
+        default:
+            printf("Invalid choice.\n");
+            break;
+        }
     }
 }
 
@@ -271,8 +401,7 @@ static int confirmYesNo(const char *prompt)
 
 int patientSignup(void)
 {
-    clearScreen();
-    printBoxed("Patient Signup");
+    printf("\n=== Patient Signup ===\n");
     Credential c = {0};
     char pwd1[64], pwd2[64];
 
@@ -287,27 +416,21 @@ int patientSignup(void)
 
     if (idExistsInCredentials(USER_CRED_FILE, c.id) || idExistsInPatients(c.id))
     {
-        printf("ID already in use. Try signing in or pick another ID.\n");
+        printf("ID already in use.\n");
         return 0;
     }
 
     printf("Choose username: ");
     getInputAuth(c.username, sizeof(c.username));
-    if (strlen(c.username) == 0)
+    if (strlen(c.username) == 0 || usernameExists(USER_CRED_FILE, c.username))
     {
-        printf("Username cannot be empty.\n");
-        return 0;
-    }
-    if (usernameExists(USER_CRED_FILE, c.username))
-    {
-        printf("Username taken. Try another.\n");
+        printf("Username invalid or taken.\n");
         return 0;
     }
 
-    /* Password */
     do
     {
-        printf("Choose password (min 6 chars, must include letters & digits): ");
+        printf("Choose password (min 6 chars, letters + digits): ");
         maskInput(pwd1, sizeof(pwd1));
         printf("Confirm password: ");
         maskInput(pwd2, sizeof(pwd2));
@@ -318,25 +441,20 @@ int patientSignup(void)
         }
         if (!validatePassword(pwd1))
         {
-            printf("Password does not meet policy. Try again.\n");
+            printf("Password does not meet policy.\n");
             continue;
         }
         break;
     } while (1);
     strncpy(c.password, pwd1, sizeof(c.password) - 1);
 
-    /* Create patient profile details */
     Patient p;
     p.id = c.id;
-    printf("\nNow enter patient profile details (these will be saved to %s)\n", PATIENT_FILE);
+    printf("\nEnter patient profile details:\n");
     printf("Name: ");
     getInputAuth(p.name, sizeof(p.name));
     printf("Age: ");
-    if (scanf("%d", &p.age) != 1)
-    {
-        clearStdin();
-        p.age = 0;
-    }
+    scanf("%d", &p.age);
     clearStdin();
     printf("Gender: ");
     getInputAuth(p.gender, sizeof(p.gender));
@@ -345,7 +463,6 @@ int patientSignup(void)
     printf("Disease: ");
     getInputAuth(p.disease, sizeof(p.disease));
 
-    /* Save patient record */
     FILE *pf = fopen(PATIENT_FILE, "ab+");
     if (!pf)
     {
@@ -355,21 +472,19 @@ int patientSignup(void)
     fwrite(&p, sizeof(Patient), 1, pf);
     fclose(pf);
 
-    /* Save credential */
     if (!saveCredential(USER_CRED_FILE, &c))
     {
         printf("Failed to save credentials.\n");
         return 0;
     }
 
-    printf("Signup successful. You can now login.\n");
+    printf("Signup successful!\n");
     return 1;
 }
 
 int doctorSignup(void)
 {
-    clearScreen();
-    printBoxed("Doctor Signup");
+    printf("\n=== Doctor Signup ===\n");
     Credential c = {0};
     char pwd1[64], pwd2[64];
 
@@ -382,29 +497,24 @@ int doctorSignup(void)
     }
     clearStdin();
 
-    if (idExistsInCredentials(DOCTOR_CRED_FILE, c.id) || idExistsInDoctors(c.id))
+    /* Check if ID already exists in DOCTOR_CRED_FILE (not DOCTOR_FILE) */
+    if (idExistsInCredentials(DOCTOR_CRED_FILE, c.id))
     {
-        printf("ID already in use. Try signing in or pick another ID.\n");
+        printf("ID already in use.\n");
         return 0;
     }
 
     printf("Choose username: ");
     getInputAuth(c.username, sizeof(c.username));
-    if (strlen(c.username) == 0)
+    if (strlen(c.username) == 0 || usernameExists(DOCTOR_CRED_FILE, c.username))
     {
-        printf("Username cannot be empty.\n");
-        return 0;
-    }
-    if (usernameExists(DOCTOR_CRED_FILE, c.username))
-    {
-        printf("Username taken. Try another.\n");
+        printf("Username invalid or taken.\n");
         return 0;
     }
 
-    /* Password */
     do
     {
-        printf("Choose password (min 6 chars, must include letters & digits): ");
+        printf("Choose password (min 6 chars, letters + digits): ");
         maskInput(pwd1, sizeof(pwd1));
         printf("Confirm password: ");
         maskInput(pwd2, sizeof(pwd2));
@@ -415,17 +525,16 @@ int doctorSignup(void)
         }
         if (!validatePassword(pwd1))
         {
-            printf("Password does not meet policy. Try again.\n");
+            printf("Password does not meet policy.\n");
             continue;
         }
         break;
     } while (1);
     strncpy(c.password, pwd1, sizeof(c.password) - 1);
 
-    /* Create doctor profile */
     Doctor d;
     d.id = c.id;
-    printf("\nNow enter doctor profile details (these will be saved to %s)\n", DOCTOR_FILE);
+    printf("\nEnter doctor profile details:\n");
     printf("Name: ");
     getInputAuth(d.name, sizeof(d.name));
     printf("Specialization: ");
@@ -433,7 +542,6 @@ int doctorSignup(void)
     printf("Phone: ");
     getInputAuth(d.phone, sizeof(d.phone));
 
-    /* Save doctor record */
     FILE *df = fopen(DOCTOR_FILE, "ab+");
     if (!df)
     {
@@ -443,520 +551,13 @@ int doctorSignup(void)
     fwrite(&d, sizeof(Doctor), 1, df);
     fclose(df);
 
-    /* Save credential */
+    /* Save to DOCTOR_CRED_FILE, not USER_CRED_FILE */
     if (!saveCredential(DOCTOR_CRED_FILE, &c))
     {
         printf("Failed to save credentials.\n");
         return 0;
     }
 
-    printf("Doctor signup successful. You can now login.\n");
+    printf("Signup successful!\n");
     return 1;
-}
-
-int patientLogin(void)
-{
-    clearScreen();
-    printBoxed("Patient Login");
-    char username[64], password[64];
-    int patientId = 0;
-    printf("Username: ");
-    getInputAuth(username, sizeof(username));
-    printf("Password: ");
-    maskInput(password, sizeof(password));
-    if (checkCredential(USER_CRED_FILE, username, password, &patientId))
-    {
-        printf("\nFound account: %s (Patient ID: %d)\n", username, patientId);
-        if (!confirmYesNo("Is this you?"))
-        {
-            printf("Login cancelled.\n");
-            return 0;
-        }
-        patientPortal(patientId);
-        return 1;
-    }
-    else
-    {
-        printf("Invalid username/password.\n");
-        return 0;
-    }
-}
-
-int doctorLogin(void)
-{
-    clearScreen();
-    printBoxed("Doctor Login");
-    char username[64], password[64];
-    int doctorId = 0;
-    printf("Username: ");
-    getInputAuth(username, sizeof(username));
-    printf("Password: ");
-    maskInput(password, sizeof(password));
-    if (checkCredential(DOCTOR_CRED_FILE, username, password, &doctorId))
-    {
-        printf("\nFound account: Dr.%s (Doctor ID: %d)\n", username, doctorId);
-        if (!confirmYesNo("Is this you?"))
-        {
-            printf("Login cancelled.\n");
-            return 0;
-        }
-        doctorPortal(doctorId);
-        return 1;
-    }
-    else
-    {
-        printf("Invalid username/password.\n");
-        return 0;
-    }
-}
-
-/* ---------------- Role Portals ---------------- */
-
-/* Show patient profile by id */
-static void showPatientProfile(int id)
-{
-    showBreadcrumb("Patient", id, "Profile");
-    FILE *fp = fopen(PATIENT_FILE, "rb");
-    if (!fp)
-    {
-        printf("No patients found.\n");
-        return;
-    }
-    Patient p;
-    while (fread(&p, sizeof(Patient), 1, fp))
-    {
-        if (p.id == id)
-        {
-            printf("\nID: %d\nName: %s\nAge: %d\nGender: %s\nPhone: %s\nDisease: %s\n",
-                   p.id, p.name, p.age, p.gender, p.phone, p.disease);
-            fclose(fp);
-            return;
-        }
-    }
-    fclose(fp);
-    printf("Profile not found.\n");
-}
-
-/* List appointments for a patient */
-static void listAppointmentsForPatient(int pid)
-{
-    showBreadcrumb("Patient", pid, "My Appointments");
-    FILE *fp = fopen(APPOINTMENT_FILE, "rb");
-    if (!fp)
-    {
-        printf("No appointments found.\n");
-        return;
-    }
-    Appointment a;
-    int found = 0;
-    printf("\n%-5s %-10s %-20s %-25s %-10s\n", "ID", "Doctor", "Date/Time", "Reason", "Status");
-    while (fread(&a, sizeof(Appointment), 1, fp))
-    {
-        if (a.patient_id == pid)
-        {
-            printf("%-5d %-10d %-20s %-25s %-10s\n",
-                   a.id, a.doctor_id, a.appointment_date, a.reason, a.status);
-            found = 1;
-        }
-    }
-    fclose(fp);
-    if (!found)
-        printf("No appointments found.\n");
-}
-
-/* Patient portal - menu-driven with explicit Back (0) */
-void patientPortal(int patientId)
-{
-    int choice = -1;
-    while (1)
-    {
-        clearScreen();
-        showBreadcrumb("Patient", patientId, "Home");
-        printf("1) Manage Appointments\n");
-        printf("2) Reports\n");
-        printf("3) Billing\n");
-        printf("4) Profile\n");
-        printf("5) Logout\n");
-        printf("0) Back\n");
-        printf("Choose: ");
-        if (scanf("%d", &choice) != 1)
-        {
-            clearStdin();
-            choice = -1;
-        }
-        clearStdin();
-
-        switch (choice)
-        {
-        case 1:
-        {
-            int sub = -1;
-            while (sub != 0)
-            {
-                clearScreen();
-                showBreadcrumb("Patient", patientId, "Manage Appointments");
-                printf("1) Book Appointment\n");
-                printf("2) View Appointments\n");
-                printf("3) Update Appointment (reschedule/cancel)\n");
-                printf("0) Back\n");
-                printf("Choose: ");
-                if (scanf("%d", &sub) != 1)
-                {
-                    clearStdin();
-                    sub = -1;
-                }
-                clearStdin();
-
-                switch (sub)
-                {
-                case 1:
-                    printf("Booking appointment. When prompted for Patient ID, enter your ID: %d\n", patientId);
-                    scheduleAppointment();
-                    break;
-                case 2:
-                    listAppointmentsForPatient(patientId);
-                    break;
-                case 3:
-                {
-                    int up = -1;
-                    clearScreen();
-                    showBreadcrumb("Patient", patientId, "Update Appointment");
-                    printf("1) Cancel Appointment\n");
-                    printf("2) Reschedule (not implemented)\n");
-                    printf("0) Back\n");
-                    printf("Choose: ");
-                    if (scanf("%d", &up) != 1)
-                    {
-                        clearStdin();
-                        up = -1;
-                    }
-                    clearStdin();
-                    if (up == 1)
-                    {
-                        cancelAppointment();
-                    }
-                    else if (up == 2)
-                    {
-                        printf("Rescheduling from UI is not implemented. Use the booking module or reschedule via source code.\n");
-                    }
-                }
-                break;
-                case 0:
-                    break;
-                default:
-                    printf("Invalid choice.\n");
-                    break;
-                }
-                if (sub != 0)
-                {
-                    printf("\nPress Enter to continue...");
-                    getchar();
-                }
-            }
-        }
-        break;
-        case 2:
-            clearScreen();
-            showBreadcrumb("Patient", patientId, "Reports");
-            viewPatientMedicalHistory();
-            printf("\nPress Enter to continue...");
-            getchar();
-            break;
-        case 3:
-            clearScreen();
-            showBreadcrumb("Patient", patientId, "Billing");
-            printf("Billing features are not implemented yet.\n");
-            printf("\nPress Enter to continue...");
-            getchar();
-            break;
-        case 4:
-        {
-            int psub = -1;
-            while (psub != 0)
-            {
-                clearScreen();
-                showBreadcrumb("Patient", patientId, "Profile");
-                printf("1) View Details\n");
-                printf("2) Update Details (not implemented)\n");
-                printf("0) Back\n");
-                printf("Choose: ");
-                if (scanf("%d", &psub) != 1)
-                {
-                    clearStdin();
-                    psub = -1;
-                }
-                clearStdin();
-                switch (psub)
-                {
-                case 1:
-                    showPatientProfile(patientId);
-                    break;
-                case 2:
-                    printf("Update profile via UI is not implemented.\n");
-                    break;
-                case 0:
-                    break;
-                default:
-                    printf("Invalid choice.\n");
-                    break;
-                }
-                if (psub != 0)
-                {
-                    printf("\nPress Enter to continue...");
-                    getchar();
-                }
-            }
-        }
-        break;
-        case 5:
-            printf("Logging out...\n");
-            return;
-        case 0:
-            /* Return to previous screen (e.g., auth menu) */
-            return;
-        default:
-            printf("Invalid choice.\n");
-            break;
-        }
-        printf("\nPress Enter to continue...");
-        getchar();
-    }
-}
-
-/* Show doctor profile */
-static void showDoctorProfile(int id)
-{
-    showBreadcrumb("Doctor", id, "Profile");
-    FILE *fp = fopen(DOCTOR_FILE, "rb");
-    if (!fp)
-    {
-        printf("No doctors found.\n");
-        return;
-    }
-    Doctor d;
-    while (fread(&d, sizeof(Doctor), 1, fp))
-    {
-        if (d.id == id)
-        {
-            printf("\nID: %d\nName: %s\nSpecialization: %s\nPhone: %s\n",
-                   d.id, d.name, d.specialization, d.phone);
-            fclose(fp);
-            return;
-        }
-    }
-    fclose(fp);
-    printf("Profile not found.\n");
-}
-
-/* List appointments for doctor */
-static void listAppointmentsForDoctor(int did)
-{
-    showBreadcrumb("Doctor", did, "My Appointments");
-    FILE *fp = fopen(APPOINTMENT_FILE, "rb");
-    if (!fp)
-    {
-        printf("No appointments found.\n");
-        return;
-    }
-    Appointment a;
-    int found = 0;
-    printf("\n%-5s %-10s %-20s %-25s %-10s\n", "ID", "Patient", "Date/Time", "Reason", "Status");
-    while (fread(&a, sizeof(Appointment), 1, fp))
-    {
-        if (a.doctor_id == did)
-        {
-            printf("%-5d %-10d %-20s %-25s %-10s\n",
-                   a.id, a.patient_id, a.appointment_date, a.reason, a.status);
-            found = 1;
-        }
-    }
-    fclose(fp);
-    if (!found)
-        printf("No appointments found.\n");
-}
-
-/* Doctor portal - menu-driven with explicit Back (0) */
-void doctorPortal(int doctorId)
-{
-    int choice = -1;
-    while (1)
-    {
-        clearScreen();
-        showBreadcrumb("Doctor", doctorId, "Home");
-        printf("1) Manage Appointments\n");
-        printf("2) Profile\n");
-        printf("3) Logout\n");
-        printf("0) Back\n");
-        printf("Choose: ");
-        if (scanf("%d", &choice) != 1)
-        {
-            clearStdin();
-            choice = -1;
-        }
-        clearStdin();
-
-        switch (choice)
-        {
-        case 1:
-        {
-            int sub = -1;
-            while (sub != 0)
-            {
-                clearScreen();
-                showBreadcrumb("Doctor", doctorId, "Manage Appointments");
-                printf("1) View Appointments\n");
-                printf("2) Update Appointment (postpone/reassign/cancel)\n");
-                printf("0) Back\n");
-                printf("Choose: ");
-                if (scanf("%d", &sub) != 1)
-                {
-                    clearStdin();
-                    sub = -1;
-                }
-                clearStdin();
-
-                switch (sub)
-                {
-                case 1:
-                    listAppointmentsForDoctor(doctorId);
-                    break;
-                case 2:
-                {
-                    int up = -1;
-                    clearScreen();
-                    showBreadcrumb("Doctor", doctorId, "Update Appointment");
-                    printf("1) Cancel Appointment\n");
-                    printf("2) Postpone/Reschedule (not implemented)\n");
-                    printf("0) Back\n");
-                    printf("Choose: ");
-                    if (scanf("%d", &up) != 1)
-                    {
-                        clearStdin();
-                        up = -1;
-                    }
-                    clearStdin();
-                    if (up == 1)
-                    {
-                        cancelAppointment();
-                    }
-                    else if (up == 2)
-                    {
-                        printf("Rescheduling from UI is not implemented.\n");
-                    }
-                }
-                break;
-                case 0:
-                    break;
-                default:
-                    printf("Invalid choice.\n");
-                    break;
-                }
-                if (sub != 0)
-                {
-                    printf("\nPress Enter to continue...");
-                    getchar();
-                }
-            }
-        }
-        break;
-        case 2:
-        {
-            int psub = -1;
-            while (psub != 0)
-            {
-                clearScreen();
-                showBreadcrumb("Doctor", doctorId, "Profile");
-                printf("1) View Details\n");
-                printf("2) Update Details (not implemented)\n");
-                printf("0) Back\n");
-                printf("Choose: ");
-                if (scanf("%d", &psub) != 1)
-                {
-                    clearStdin();
-                    psub = -1;
-                }
-                clearStdin();
-                switch (psub)
-                {
-                case 1:
-                    showDoctorProfile(doctorId);
-                    break;
-                case 2:
-                    printf("Update profile via UI is not implemented.\n");
-                    break;
-                case 0:
-                    break;
-                default:
-                    printf("Invalid choice.\n");
-                    break;
-                }
-                if (psub != 0)
-                {
-                    printf("\nPress Enter to continue...");
-                    getchar();
-                }
-            }
-        }
-        break;
-        case 3:
-            printf("Logging out...\n");
-            return;
-        case 0:
-            return;
-        default:
-            printf("Invalid choice.\n");
-            break;
-        }
-        printf("\nPress Enter to continue...");
-        getchar();
-    }
-}
-
-/* Top-level auth menu - minimal choices, guided flow */
-void authMenu(void)
-{
-    int choice = -1;
-    do
-    {
-        clearScreen();
-        printBoxed("Authentication");
-        printf("1) Patient Login\n");
-        printf("2) Patient Signup\n");
-        printf("3) Doctor Login\n");
-        printf("4) Doctor Signup\n");
-        printf("0) Exit\n");
-        printf("Choose: ");
-        if (scanf("%d", &choice) != 1)
-        {
-            clearStdin();
-            choice = -1;
-        }
-        clearStdin();
-        switch (choice)
-        {
-        case 1:
-            patientLogin();
-            break;
-        case 2:
-            patientSignup();
-            break;
-        case 3:
-            doctorLogin();
-            break;
-        case 4:
-            doctorSignup();
-            break;
-        case 0:
-            printf("Exiting authentication.\n");
-            break;
-        default:
-            printf("Invalid choice.\n");
-            break;
-        }
-        if (choice != 0)
-        {
-            printf("\nPress Enter to continue...");
-            getchar();
-        }
-    } while (choice != 0);
 }

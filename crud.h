@@ -1,10 +1,13 @@
 #ifndef CRUD_H
 #define CRUD_H
 
+#include <time.h>
+
 #define PATIENT_FILE "data/patients.dat"
 #define DOCTOR_FILE "data/doctors.dat"
 #define APPOINTMENT_FILE "data/appointments.dat"
 #define MEDICAL_RECORD_FILE "data/medical_records.dat"
+#define BILL_FILE "data/bills.dat"
 
 typedef struct
 {
@@ -24,48 +27,73 @@ typedef struct
     char phone[15];
 } Doctor;
 
-// --- New Feature: Appointments ---
-// Links a patient to a doctor for a scheduled visit.
 typedef struct
 {
     int id;
-    int patient_id;            // Foreign key to Patient
-    int doctor_id;             // Foreign key to Doctor
-    char appointment_date[20]; // Format: YYYY-MM-DD HH:MM
+    int patient_id;
+    int doctor_id;
+    char appointment_date[20];
     char reason[100];
-    char status[20]; // e.g., "Scheduled", "Completed", "Cancelled"
+    char status[20];
 } Appointment;
 
-// --- New Feature: Medical Records ---
-// Stores details of a patient's diagnosis and treatment for a specific visit.
 typedef struct
 {
     int id;
-    int appointment_id; // Links this record to a specific appointment
+    int appointment_id;
     char diagnosis[100];
     char prescription[100];
 } MedicalRecord;
 
+typedef struct
+{
+    int id;
+    int appointment_id;
+    int patient_id;
+    float amount;
+    char date[20];
+    char status[20]; /* Paid / Unpaid */
+} Bill;
+
+/* Patient CRUD */
 void addPatient();
 void viewPatients();
 void updatePatient();
 void deletePatient();
 
+/* Doctor CRUD */
 void addDoctor();
 void viewDoctors();
 void updateDoctor();
 void deleteDoctor();
 
-// --- Appointment Management Functions ---
+/* Appointments */
+void scheduleAppointmentWithConflictCheck();
 void scheduleAppointment();
-void viewAppointments(); // Could be filtered by doctor or patient
+void viewAppointments();
 void cancelAppointment();
+void rescheduleAppointment();
 
-// --- Medical Record Management Functions ---
+/* Medical Records */
 void addMedicalRecord();
 void viewPatientMedicalHistory();
 
-// --- Helper Functions ---
+/* Billing */
+void generateBill(int appointmentId, int patientId, float amount);
+void viewPatientBills(int patientId);
+void viewAllBills(void);
+
+/* Search */
+void searchPatientByName(const char *name);
+
+/* Analytics */
+void analyticsMenu();
+void totalPatientsAndDoctors();
+void totalAppointments();
+void doctorAppointmentCount();
+
+/* Utilities */
 void getInput(char *buffer, int size);
+void clearStdin(void);
 
 #endif
