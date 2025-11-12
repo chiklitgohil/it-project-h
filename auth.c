@@ -5,39 +5,6 @@
 #include <conio.h> /* getch available on Windows */
 #endif
 
-/* Migrate legacy credential filenames (if present) to the new names.
-   This helps preserve existing data after we renamed credential files.
-   Called once at program startup. */
-void migrateCredentialFiles(void)
-{
-    /* Map old -> new */
-    const char *old_new[][2] = {
-        {"data/users.dat", "data/patients_credentials.dat"},
-        {"data/doctor_creds.dat", "data/doctors_credentials.dat"},
-        {"data/admin_creds.dat", "data/admins_credentials.dat"},
-    };
-
-    for (size_t i = 0; i < sizeof(old_new) / sizeof(old_new[0]); ++i)
-    {
-        const char *oldp = old_new[i][0];
-        const char *newp = old_new[i][1];
-        FILE *fold = fopen(oldp, "rb");
-        if (fold)
-        {
-            fclose(fold);
-            /* if new file already exists, skip rename to avoid overwrite */
-            FILE *fnew = fopen(newp, "rb");
-            if (fnew)
-            {
-                fclose(fnew);
-                continue;
-            }
-            /* perform rename; if it fails, just continue */
-            rename(oldp, newp);
-        }
-    }
-}
-
 /* getInputAuth - use this for auth input, distinct from crud.getInput */
 void getInputAuth(char *buf, int size)
 {
@@ -66,14 +33,6 @@ int validatePassword(const char *pwd)
             hasAlpha = 1;
     }
     return hasDigit && hasAlpha;
-}
-
-/* Masked input for password.
-   - On Windows: use getch() to provide masked input.
-   - On other platforms: fallback to visible input via fgets (simple, portable). */
-void maskInput(char *buf, int size)
-{
-    getInputAuth(buf, size);
 }
 
 /* Credential file helpers */
@@ -445,9 +404,9 @@ int patientSignup(void)
     do
     {
         printf("Choose password (min 6 chars, letters + digits): ");
-        maskInput(pwd1, sizeof(pwd1));
+        getInputAuth(pwd1, sizeof(pwd1));
         printf("Confirm password: ");
-        maskInput(pwd2, sizeof(pwd2));
+        getInputAuth(pwd2, sizeof(pwd2));
         if (strcmp(pwd1, pwd2) != 0)
         {
             printf("Passwords do not match. Try again.\n");
@@ -523,9 +482,9 @@ int doctorSignup(void)
     do
     {
         printf("Choose password (min 6 chars, letters + digits): ");
-        maskInput(pwd1, sizeof(pwd1));
+        getInputAuth(pwd1, sizeof(pwd1));
         printf("Confirm password: ");
-        maskInput(pwd2, sizeof(pwd2));
+        getInputAuth(pwd2, sizeof(pwd2));
         if (strcmp(pwd1, pwd2) != 0)
         {
             printf("Passwords do not match. Try again.\n");
@@ -621,9 +580,9 @@ int adminSignup(void)
     do
     {
         printf("Choose password (min 6 chars, letters + digits): ");
-        maskInput(pwd1, sizeof(pwd1));
+        getInputAuth(pwd1, sizeof(pwd1));
         printf("Confirm password: ");
-        maskInput(pwd2, sizeof(pwd2));
+        getInputAuth(pwd2, sizeof(pwd2));
         if (strcmp(pwd1, pwd2) != 0)
         {
             printf("Passwords do not match. Try again.\n");

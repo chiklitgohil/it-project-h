@@ -10,8 +10,7 @@
    and the user can always go Back to the Main Menu. */
 int main(void)
 {
-    /* Migrate any legacy credential files to the new names before starting */
-    migrateCredentialFiles();
+
     int choice = -1;
     while (1)
     {
