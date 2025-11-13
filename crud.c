@@ -974,123 +974,138 @@ void addMedicalRecord()
 
 /* --- Billing helpers --- */
 
-/* Mark a bill as Paid by bill id */
-void markBillAsPaid(int billId)
+/* Add: generate bill, view patient bills, view all bills, and view doctor reports */
+void generateBill(int appointmentId, int patientId, float amount)
 {
-    FILE *fp = fopen(BILL_FILE, "rb+");
-    if (!fp)
-    {
-        printf("No bills found.\n");
-        return;
-    }
+	FILE *fp = fopen(BILL_FILE, "ab");
+	if (!fp)
+	{
+		perror("Error opening bill file");
+		return;
+	}
 
-    Bill b;
-    int found = 0;
-    while (fread(&b, sizeof(Bill), 1, fp))
-    {
-        if (b.id == billId)
-        {
-            if (strcmp(b.status, "Paid") == 0)
-            {
-                printf("Bill %d is already marked as Paid.\n", billId);
-                found = 1;
-                break;
-            }
-            strncpy(b.status, "Paid", sizeof(b.status)-1);
-            if (fseek(fp, -(long)sizeof(Bill), SEEK_CUR) != 0)
-                perror("fseek");
-            if (fwrite(&b, sizeof(Bill), 1, fp) != 1)
-                perror("fwrite");
-            fflush(fp);
-            printf("Bill %d marked as Paid.\n", billId);
-            found = 1;
-            break;
-        }
-    }
-    if (!found)
-        printf("Bill not found.\n");
-    fclose(fp);
+	Bill b;
+	b.id = getNextId(BILL_FILE, sizeof(Bill));
+	b.appointment_id = appointmentId;
+	b.patient_id = patientId;
+	b.amount = amount;
+	strncpy(b.status, "Unpaid", sizeof(b.status)-1);
+
+	time_t now = time(NULL);
+	struct tm *tm_info = localtime(&now);
+	strftime(b.date, sizeof(b.date), "%Y-%m-%d", tm_info);
+
+	if (fwrite(&b, sizeof(Bill), 1, fp) != 1)
+		perror("Failed to write bill");
+	fclose(fp);
+	printf("Bill generated: ID %d, Amount: $%.2f\n", b.id, amount);
 }
 
-/* Billing management UI for admins */
-void manageBilling(void)
+void viewPatientBills(int patientId)
 {
-    int choice = -1;
-    while (1)
-    {
-        printf("\n=== Billing Management ===\n");
-        printf("1) View All Bills\n");
-        printf("2) View Bills for a Patient\n");
-        printf("3) Mark Bill as Paid\n");
-        printf("4) Generate Bill Manually\n");
-        printf("0) Back\n");
-        printf("Choose: ");
-        if (scanf("%d", &choice) != 1)
-        {
-            clearStdin();
-            choice = -1;
-        }
-        clearStdin();
+	FILE *fp = fopen(BILL_FILE, "rb");
+	if (!fp)
+	{
+		printf("No bills found.\n");
+		return;
+	}
 
-        if (choice == 1)
-        {
-            viewAllBills();
-        }
-        else if (choice == 2)
-        {
-            int pid;
-            printf("Enter Patient ID: ");
-            if (scanf("%d", &pid) != 1) { clearStdin(); printf("Invalid input.\n"); continue; }
-            clearStdin();
-            viewPatientBills(pid);
-        }
-        else if (choice == 3)
-        {
-            int bid;
-            printf("Enter Bill ID to mark as Paid: ");
-            if (scanf("%d", &bid) != 1) { clearStdin(); printf("Invalid input.\n"); continue; }
-            clearStdin();
-            markBillAsPaid(bid);
-        }
-        else if (choice == 4)
-        {
-            int app_id;
-            float amount;
-            printf("Enter Appointment ID: ");
-            if (scanf("%d", &app_id) != 1) { clearStdin(); printf("Invalid input.\n"); continue; }
-            clearStdin();
+	Bill b;
+	printf("\n%-5s %-15s %-10s %-12s %-10s\n",
+		   "ID", "Appointment", "Amount", "Date", "Status");
 
-            /* find appointment to get patient_id */
-            FILE *apfp = fopen(APPOINTMENT_FILE, "rb");
-            if (!apfp) { printf("Appointments file missing.\n"); continue; }
-            Appointment a;
-            int pid = 0;
-            while (fread(&a, sizeof(Appointment), 1, apfp))
-            {
-                if (a.id == app_id)
-                {
-                    pid = a.patient_id;
-                    break;
-                }
-            }
-            fclose(apfp);
-            if (pid == 0) { printf("Appointment not found.\n"); continue; }
+	int found = 0;
+	while (fread(&b, sizeof(Bill), 1, fp))
+	{
+		if (b.patient_id == patientId)
+		{
+			printf("%-5d %-15d $%-9.2f %-12s %-10s\n",
+				   b.id, b.appointment_id, b.amount, b.date, b.status);
+			found = 1;
+		}
+	}
+	fclose(fp);
 
-            printf("Enter amount: ");
-            if (scanf("%f", &amount) != 1) { clearStdin(); printf("Invalid amount.\n"); continue; }
-            clearStdin();
+	if (!found)
+		printf("No bills for this patient.\n");
+}
 
-            generateBill(app_id, pid, amount);
-        }
-        else if (choice == 0)
-        {
-            return;
-        }
-        else
-        {
-            printf("Invalid choice.\n");
-        }
-    }
+void viewAllBills(void)
+{
+	FILE *fp = fopen(BILL_FILE, "rb");
+	if (!fp)
+	{
+		printf("No bills found.\n");
+		return;
+	}
+
+	Bill b;
+	float totalRevenue = 0.0f, totalUnpaid = 0.0f;
+	printf("\n%-5s %-10s %-10s %-12s %-12s %-10s\n",
+		   "ID", "Patient", "Amount", "Appointment", "Date", "Status");
+
+	while (fread(&b, sizeof(Bill), 1, fp))
+	{
+		printf("%-5d %-10d $%-9.2f %-12d %-12s %-10s\n",
+			   b.id, b.patient_id, b.amount, b.appointment_id, b.date, b.status);
+		totalRevenue += b.amount;
+		if (strcmp(b.status, "Unpaid") == 0)
+			totalUnpaid += b.amount;
+	}
+	fclose(fp);
+
+	printf("\n--- Summary ---\n");
+	printf("Total Revenue: $%.2f\n", totalRevenue);
+	printf("Unpaid Amount: $%.2f\n", totalUnpaid);
+}
+
+/* View Doctor Reports (Medical Records) for a patient */
+void viewDoctorReports(int patientId)
+{
+	printf("\n--- Doctor Reports for Patient ID: %d ---\n", patientId);
+
+	FILE *app_fp = fopen(APPOINTMENT_FILE, "rb");
+	FILE *rec_fp = fopen(MEDICAL_RECORD_FILE, "rb");
+
+	if (!app_fp || !rec_fp)
+	{
+		printf("No reports found.\n");
+		if (app_fp) fclose(app_fp);
+		if (rec_fp) fclose(rec_fp);
+		return;
+	}
+
+	Appointment app;
+	MedicalRecord rec;
+	int records_found = 0;
+
+	printf("\n%-5s %-10s %-20s %-30s %-30s\n",
+		   "ID", "Doctor ID", "Date", "Diagnosis", "Prescription");
+
+	while (fread(&app, sizeof(Appointment), 1, app_fp))
+	{
+		if (app.patient_id == patientId)
+		{
+			rewind(rec_fp);
+			while (fread(&rec, sizeof(MedicalRecord), 1, rec_fp))
+			{
+				if (rec.appointment_id == app.id)
+				{
+					printf("%-5d %-10d %-20s %-30s %-30s\n",
+						   rec.id, app.doctor_id, app.appointment_date,
+						   rec.diagnosis, rec.prescription);
+					records_found++;
+					break;
+				}
+			}
+		}
+	}
+
+	if (records_found == 0)
+		printf("No reports found.\n");
+
+	fclose(app_fp);
+	fclose(rec_fp);
 }
 
 // --- Search ---
