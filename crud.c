@@ -1137,3 +1137,122 @@ void searchPatientByName(const char *name)
     if (!found)
         printf("No patients found with name containing '%s'.\n", name);
 }
+
+/* --- Billing: mark bill as paid and management UI --- */
+
+void markBillAsPaid(int billId)
+{
+	FILE *fp = fopen(BILL_FILE, "rb+");
+	if (!fp)
+	{
+		printf("No bills found.\n");
+		return;
+	}
+
+	Bill b;
+	int found = 0;
+	while (fread(&b, sizeof(Bill), 1, fp))
+	{
+		if (b.id == billId)
+		{
+			if (strcmp(b.status, "Paid") == 0)
+			{
+				printf("Bill %d is already marked as Paid.\n", billId);
+				found = 1;
+				break;
+			}
+			strncpy(b.status, "Paid", sizeof(b.status)-1);
+			if (fseek(fp, -(long)sizeof(Bill), SEEK_CUR) != 0)
+				perror("fseek");
+			if (fwrite(&b, sizeof(Bill), 1, fp) != 1)
+				perror("fwrite");
+			fflush(fp);
+			printf("Bill %d marked as Paid.\n", billId);
+			found = 1;
+			break;
+		}
+	}
+	if (!found)
+		printf("Bill not found.\n");
+	fclose(fp);
+}
+
+void manageBilling(void)
+{
+	int choice = -1;
+	while (1)
+	{
+		printf("\n=== Billing Management ===\n");
+		printf("1) View All Bills\n");
+		printf("2) View Bills for a Patient\n");
+		printf("3) Mark Bill as Paid\n");
+		printf("4) Generate Bill Manually\n");
+		printf("0) Back\n");
+		printf("Choose: ");
+		if (scanf("%d", &choice) != 1)
+		{
+			clearStdin();
+			choice = -1;
+		}
+		clearStdin();
+
+		if (choice == 1)
+		{
+			viewAllBills();
+		}
+		else if (choice == 2)
+		{
+			int pid;
+			printf("Enter Patient ID: ");
+			if (scanf("%d", &pid) != 1) { clearStdin(); printf("Invalid input.\n"); continue; }
+			clearStdin();
+			viewPatientBills(pid);
+		}
+		else if (choice == 3)
+		{
+			int bid;
+			printf("Enter Bill ID to mark as Paid: ");
+			if (scanf("%d", &bid) != 1) { clearStdin(); printf("Invalid input.\n"); continue; }
+			clearStdin();
+			markBillAsPaid(bid);
+		}
+		else if (choice == 4)
+		{
+			int app_id;
+			float amount;
+			printf("Enter Appointment ID: ");
+			if (scanf("%d", &app_id) != 1) { clearStdin(); printf("Invalid input.\n"); continue; }
+			clearStdin();
+
+			/* find appointment to get patient_id */
+			FILE *apfp = fopen(APPOINTMENT_FILE, "rb");
+			if (!apfp) { printf("Appointments file missing.\n"); continue; }
+			Appointment a;
+			int pid = 0;
+			while (fread(&a, sizeof(Appointment), 1, apfp))
+			{
+				if (a.id == app_id)
+				{
+					pid = a.patient_id;
+					break;
+				}
+			}
+			fclose(apfp);
+			if (pid == 0) { printf("Appointment not found.\n"); continue; }
+
+			printf("Enter amount: ");
+			if (scanf("%f", &amount) != 1) { clearStdin(); printf("Invalid amount.\n"); continue; }
+			clearStdin();
+
+			generateBill(app_id, pid, amount);
+		}
+		else if (choice == 0)
+		{
+			return;
+		}
+		else
+		{
+			printf("Invalid choice.\n");
+		}
+	}
+}
