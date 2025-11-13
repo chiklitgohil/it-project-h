@@ -54,6 +54,18 @@ static int usernameExists(const char *file, const char *username)
     return 0;
 }
 
+/* Check username across all credential files to enforce global uniqueness */
+static int usernameExistsGlobally(const char *username)
+{
+    if (usernameExists(PATIENTS_CRED_FILE, username))
+        return 1;
+    if (usernameExists(DOCTORS_CRED_FILE, username))
+        return 1;
+    if (usernameExists(ADMINS_CRED_FILE, username))
+        return 1;
+    return 0;
+}
+
 static int idExistsInCredentials(const char *file, int id)
 {
     FILE *fp = fopen(file, "rb");
@@ -179,54 +191,6 @@ static int checkCredential(const char *file, const char *username, const char *p
         printf("Incorrect password.\n");
     }
     return 0;
-}
-
-int patientLogin(void)
-{
-    printf("\n=== Patient Login ===\n");
-    char username[64], password[64];
-    int patientId = 0;
-
-    printf("Username: ");
-    getInputAuth(username, sizeof(username));
-    printf("Password: ");
-    getInputAuth(password, sizeof(password));
-
-    if (checkCredential(PATIENTS_CRED_FILE, username, password, &patientId))
-    {
-        printf("Login successful. Patient ID: %d\n", patientId);
-        patientPortal(patientId);
-        return 1;
-    }
-    else
-    {
-        printf("Invalid username/password.\n");
-        return 0;
-    }
-}
-
-int doctorLogin(void)
-{
-    printf("\n=== Doctor Login ===\n");
-    char username[64], password[64];
-    int doctorId = 0;
-
-    printf("Username: ");
-    getInputAuth(username, sizeof(username));
-    printf("Password: ");
-    getInputAuth(password, sizeof(password));
-
-    if (checkCredential(DOCTORS_CRED_FILE, username, password, &doctorId))
-    {
-        printf("Login successful. Doctor ID: %d\n", doctorId);
-        doctorPortal(doctorId);
-        return 1;
-    }
-    else
-    {
-        printf("Invalid username/password.\n");
-        return 0;
-    }
 }
 
 /* Helper: view appointments for a specific patient */
@@ -395,9 +359,14 @@ int patientSignup(void)
 
     printf("Choose username: ");
     getInputAuth(c.username, sizeof(c.username));
-    if (strlen(c.username) == 0 || usernameExists(PATIENTS_CRED_FILE, c.username))
+    if (strlen(c.username) == 0)
     {
-        printf("Username invalid or taken.\n");
+        printf("Username cannot be empty.\n");
+        return 0;
+    }
+    if (usernameExistsGlobally(c.username))
+    {
+        printf("Username already exists. Choose a different username.\n");
         return 0;
     }
 
@@ -433,8 +402,7 @@ int patientSignup(void)
     getInputAuth(p.gender, sizeof(p.gender));
     printf("Phone: ");
     getInputAuth(p.phone, sizeof(p.phone));
-    printf("Disease: ");
-    getInputAuth(p.disease, sizeof(p.disease));
+    /* disease removed - do not collect */
 
     FILE *pf = fopen(PATIENT_FILE, "ab+");
     if (!pf)
@@ -473,9 +441,14 @@ int doctorSignup(void)
 
     printf("Choose username: ");
     getInputAuth(c.username, sizeof(c.username));
-    if (strlen(c.username) == 0 || usernameExists(DOCTORS_CRED_FILE, c.username))
+    if (strlen(c.username) == 0)
     {
-        printf("Username invalid or taken.\n");
+        printf("Username cannot be empty.\n");
+        return 0;
+    }
+    if (usernameExistsGlobally(c.username))
+    {
+        printf("Username already exists. Choose a different username.\n");
         return 0;
     }
 
@@ -535,30 +508,6 @@ int doctorSignup(void)
     return 1;
 }
 
-int adminLogin(void)
-{
-    printf("\n=== Admin Login ===\n");
-    char username[64], password[64];
-    int adminId = 0;
-
-    printf("Username: ");
-    getInputAuth(username, sizeof(username));
-    printf("Password: ");
-    getInputAuth(password, sizeof(password));
-
-    if (checkCredential(ADMINS_CRED_FILE, username, password, &adminId))
-    {
-        printf("Login successful. Admin ID: %d\n", adminId);
-        adminPortal(adminId);
-        return 1;
-    }
-    else
-    {
-        printf("Invalid username/password.\n");
-        return 0;
-    }
-}
-
 int adminSignup(void)
 {
     printf("\n=== Admin Signup ===\n");
@@ -571,9 +520,14 @@ int adminSignup(void)
 
     printf("Choose username: ");
     getInputAuth(c.username, sizeof(c.username));
-    if (strlen(c.username) == 0 || usernameExists(ADMINS_CRED_FILE, c.username))
+    if (strlen(c.username) == 0)
     {
-        printf("Username invalid or taken.\n");
+        printf("Username cannot be empty.\n");
+        return 0;
+    }
+    if (usernameExistsGlobally(c.username))
+    {
+        printf("Username already exists. Choose a different username.\n");
         return 0;
     }
 
@@ -709,8 +663,7 @@ void adminPortal(int adminId)
                 printf("\n=== Analytics & Reports ===\n");
                 printf("1) Total Patients & Doctors\n");
                 printf("2) Total Appointments\n");
-                printf("3) View All Bills & Revenue\n");
-                printf("4) Doctor Appointment Count\n");
+                printf("3) Doctor Appointment Count\n");
                 printf("0) Back to Menu\n");
                 printf("Choose: ");
                 if (scanf("%d", &sub) != 1)
@@ -728,9 +681,6 @@ void adminPortal(int adminId)
                     totalAppointments();
                     break;
                 case 3:
-                    viewAllBills();
-                    break;
-                case 4:
                     doctorAppointmentCount();
                     break;
                 case 0:
@@ -750,4 +700,76 @@ void adminPortal(int adminId)
             break;
         }
     }
+}
+
+/* ---------------- Logins ---------------- */
+
+int patientLogin(void)
+{
+    char username[64], password[64];
+    int id = 0;
+
+    printf("\n=== Patient Login ===\n");
+    printf("Username: ");
+    getInputAuth(username, sizeof(username));
+    printf("Password: ");
+    getInputAuth(password, sizeof(password));
+
+    if (checkCredential(PATIENTS_CRED_FILE, username, password, &id))
+    {
+        if (!idExistsInPatients(id))
+        {
+            printf("No patient profile found for user ID %d.\n", id);
+            return 0;
+        }
+        printf("Login successful.\n");
+        patientPortal(id);
+        return 1;
+    }
+    return 0;
+}
+
+int doctorLogin(void)
+{
+    char username[64], password[64];
+    int id = 0;
+
+    printf("\n=== Doctor Login ===\n");
+    printf("Username: ");
+    getInputAuth(username, sizeof(username));
+    printf("Password: ");
+    getInputAuth(password, sizeof(password));
+
+    if (checkCredential(DOCTORS_CRED_FILE, username, password, &id))
+    {
+        if (!idExistsInDoctors(id))
+        {
+            printf("No doctor profile found for user ID %d.\n", id);
+            return 0;
+        }
+        printf("Login successful.\n");
+        doctorPortal(id);
+        return 1;
+    }
+    return 0;
+}
+
+int adminLogin(void)
+{
+    char username[64], password[64];
+    int id = 0;
+
+    printf("\n=== Admin Login ===\n");
+    printf("Username: ");
+    getInputAuth(username, sizeof(username));
+    printf("Password: ");
+    getInputAuth(password, sizeof(password));
+
+    if (checkCredential(ADMINS_CRED_FILE, username, password, &id))
+    {
+        printf("Login successful.\n");
+        adminPortal(id);
+        return 1;
+    }
+    return 0;
 }

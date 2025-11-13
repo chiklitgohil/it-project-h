@@ -16,7 +16,7 @@ typedef struct
     int age;
     char gender[10];
     char phone[15];
-    char disease[50];
+    /* disease removed — patient profile does not store disease by design */
 } Patient;
 
 typedef struct

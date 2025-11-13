@@ -82,22 +82,22 @@ int getNextId(const char *filename, size_t struct_size)
 /* Check if a patient with the given ID exists in the database */
 static int patientExists(int id)
 {
-	FILE *fp = fopen(PATIENT_FILE, "rb");
-	if (!fp)
-		return 0; /* File doesn't exist, so patient doesn't exist */
+    FILE *fp = fopen(PATIENT_FILE, "rb");
+    if (!fp)
+        return 0; /* File doesn't exist, so patient doesn't exist */
 
-	Patient p;
-	/* Scan through all patient records looking for a match */
-	while (fread(&p, sizeof(Patient), 1, fp))
-	{
-		if (p.id == id)
-		{
-			fclose(fp);
-			return 1; /* Found the patient */
-		}
-	}
-	fclose(fp);
-	return 0; /* Patient not found */
+    Patient p;
+    /* Scan through all patient records looking for a match */
+    while (fread(&p, sizeof(Patient), 1, fp))
+    {
+        if (p.id == id)
+        {
+            fclose(fp);
+            return 1; /* Found the patient */
+        }
+    }
+    fclose(fp);
+    return 0; /* Patient not found */
 }
 
 /* ============================================================================
@@ -188,124 +188,116 @@ static int appointmentExists(int id)
  */
 void addPatient()
 {
-	FILE *fp = fopen(PATIENT_FILE, "ab+");
-	if (!fp)
-	{
-		perror("Error opening patient file");
-		return;
-	}
+    FILE *fp = fopen(PATIENT_FILE, "ab+");
+    if (!fp)
+    {
+        perror("Error opening patient file");
+        return;
+    }
 
-	Patient p;
-	/* Collect patient information from user input */
-	printf("Enter ID: ");
-	scanf("%d", &p.id);
-	clearStdin(); /* Clear leftover newline from scanf */
+    Patient p;
+    /* Collect patient information from user input */
+    printf("Enter ID: ");
+    scanf("%d", &p.id);
+    clearStdin(); /* Clear leftover newline from scanf */
 
-	printf("Name: ");
-	getInput(p.name, sizeof(p.name));
+    printf("Name: ");
+    getInput(p.name, sizeof(p.name));
 
-	printf("Age: ");
-	scanf("%d", &p.age);
-	clearStdin();
+    printf("Age: ");
+    scanf("%d", &p.age);
+    clearStdin();
 
-	printf("Gender: ");
-	getInput(p.gender, sizeof(p.gender));
+    printf("Gender: ");
+    getInput(p.gender, sizeof(p.gender));
 
-	printf("Phone: ");
-	getInput(p.phone, sizeof(p.phone));
+    printf("Phone: ");
+    getInput(p.phone, sizeof(p.phone));
 
-	printf("Disease: ");
-	getInput(p.disease, sizeof(p.disease));
-
-	/* Write the patient struct to the file */
-	fwrite(&p, sizeof(Patient), 1, fp);
-	fclose(fp);
+    /* Write the patient struct to the file */
+    fwrite(&p, sizeof(Patient), 1, fp);
+    fclose(fp);
 }
 
 /* Display all patients in a formatted table
-   Shows: ID, Name, Age, Gender, Phone, Disease */
+   Shows: ID, Name, Age, Gender, Phone */
 void viewPatients()
 {
-	FILE *fp = fopen(PATIENT_FILE, "rb");
-	if (!fp)
-		return;
+    FILE *fp = fopen(PATIENT_FILE, "rb");
+    if (!fp)
+        return;
 
-	Patient p;
-	/* Print table header with column width specifiers */
-	printf("\n%-5s %-15s %-5s %-10s %-15s %-20s\n",
-		   "ID", "Name", "Age", "Gender", "Phone", "Disease");
+    Patient p;
+    /* Print table header with column width specifiers */
+    printf("\n%-5s %-20s %-5s %-10s %-15s\n",
+           "ID", "Name", "Age", "Gender", "Phone");
 
-	/* Read and print each patient record */
-	while (fread(&p, sizeof(Patient), 1, fp))
-		printf("%-5d %-15s %-5d %-10s %-15s %-20s\n",
-			   p.id, p.name, p.age, p.gender, p.phone, p.disease);
+    /* Read and print each patient record */
+    while (fread(&p, sizeof(Patient), 1, fp))
+        printf("%-5d %-20s %-5d %-10s %-15s\n",
+               p.id, p.name, p.age, p.gender, p.phone);
 
-	fclose(fp);
+    fclose(fp);
 }
 
 /* Update an existing patient's information
-   Allows editing: Name, Age, Gender, Phone, Disease
+   Allows editing: Name, Age, Gender, Phone
    Press Enter to skip a field and keep the current value */
 void updatePatient()
 {
-	FILE *fp = fopen(PATIENT_FILE, "rb+");
-	if (!fp)
-		return;
+    FILE *fp = fopen(PATIENT_FILE, "rb+");
+    if (!fp)
+        return;
 
-	int id, found = 0;
-	printf("Enter Patient ID to update: ");
-	scanf("%d", &id);
-	clearStdin();
+    int id, found = 0;
+    printf("Enter Patient ID to update: ");
+    scanf("%d", &id);
+    clearStdin();
 
-	Patient p;
-	while (fread(&p, sizeof(Patient), 1, fp))
-	{
-		if (p.id == id)
-		{
-			/* Prompt user to update each field - enter skips the field */
-			char buf[128];
-			printf("Enter new Name (press Enter to keep '%s'): ", p.name);
-			getInput(buf, sizeof(buf));
-			if (buf[0] != '\0')
-				strncpy(p.name, buf, sizeof(p.name));
+    Patient p;
+    while (fread(&p, sizeof(Patient), 1, fp))
+    {
+        if (p.id == id)
+        {
+            /* Prompt user to update each field - enter skips the field */
+            char buf[128];
+            printf("Enter new Name (press Enter to keep '%s'): ", p.name);
+            getInput(buf, sizeof(buf));
+            if (buf[0] != '\0')
+                strncpy(p.name, buf, sizeof(p.name));
 
-			printf("Enter new Age (press Enter to keep '%d'): ", p.age);
-			getInput(buf, sizeof(buf));
-			if (buf[0] != '\0')
-			{
-				int newAge;
-				if (sscanf(buf, "%d", &newAge) == 1)
-					p.age = newAge;
-			}
+            printf("Enter new Age (press Enter to keep '%d'): ", p.age);
+            getInput(buf, sizeof(buf));
+            if (buf[0] != '\0')
+            {
+                int newAge;
+                if (sscanf(buf, "%d", &newAge) == 1)
+                    p.age = newAge;
+            }
 
-			printf("Enter new Gender (press Enter to keep '%s'): ", p.gender);
-			getInput(buf, sizeof(buf));
-			if (buf[0] != '\0')
-				strncpy(p.gender, buf, sizeof(p.gender));
+            printf("Enter new Gender (press Enter to keep '%s'): ", p.gender);
+            getInput(buf, sizeof(buf));
+            if (buf[0] != '\0')
+                strncpy(p.gender, buf, sizeof(p.gender));
 
-			printf("Enter new Phone (press Enter to keep '%s'): ", p.phone);
-			getInput(buf, sizeof(buf));
-			if (buf[0] != '\0')
-				strncpy(p.phone, buf, sizeof(p.phone));
+            printf("Enter new Phone (press Enter to keep '%s'): ", p.phone);
+            getInput(buf, sizeof(buf));
+            if (buf[0] != '\0')
+                strncpy(p.phone, buf, sizeof(p.phone));
 
-			printf("Enter new Disease (press Enter to keep '%s'): ", p.disease);
-			getInput(buf, sizeof(buf));
-			if (buf[0] != '\0')
-				strncpy(p.disease, buf, sizeof(p.disease));
+            /* Move file pointer back one record and overwrite the old patient data */
+            if (fseek(fp, -(long)sizeof(Patient), SEEK_CUR) != 0)
+                perror("fseek");
+            fwrite(&p, sizeof(Patient), 1, fp);
+            found = 1;
+            printf("Patient updated.\n");
+            break;
+        }
+    }
 
-			/* Move file pointer back one record and overwrite the old patient data */
-			if (fseek(fp, -(long)sizeof(Patient), SEEK_CUR) != 0)
-				perror("fseek");
-			fwrite(&p, sizeof(Patient), 1, fp);
-			found = 1;
-			printf("Patient updated.\n");
-			break;
-		}
-	}
-
-	fclose(fp);
-	if (!found)
-		printf("Record not found.\n");
+    fclose(fp);
+    if (!found)
+        printf("Record not found.\n");
 }
 
 /* Delete a patient from the database by ID
@@ -886,42 +878,71 @@ void doctorAppointmentCount()
 	printf("Doctor ID %d has %d active appointments.\n", doctorId, count);
 }
 
+/* Helper function: Mark appointment as "Done" after medical record is added */
+static void markAppointmentAsDone(int appointmentId)
+{
+    FILE *fp = fopen(APPOINTMENT_FILE, "rb+");
+    if (!fp)
+        return;
+
+    Appointment a;
+    while (fread(&a, sizeof(Appointment), 1, fp))
+    {
+        if (a.id == appointmentId)
+        {
+            strcpy(a.status, "Done");
+            if (fseek(fp, -(long)sizeof(Appointment), SEEK_CUR) != 0)
+                perror("fseek");
+            if (fwrite(&a, sizeof(Appointment), 1, fp) != 1)
+                perror("fwrite");
+            fflush(fp);
+            break;
+        }
+    }
+    fclose(fp);
+}
+
 // --- Medical Records ---
 void addMedicalRecord()
 {
-	printf("\n--- Add Medical Record ---\n");
-	int app_id;
-	printf("Enter Appointment ID: ");
-	scanf("%d", &app_id);
-	clearStdin();
+    printf("\n--- Add Medical Record ---\n");
+    int app_id;
+    printf("Enter Appointment ID: ");
+    scanf("%d", &app_id);
+    clearStdin();
 
-	if (!appointmentExists(app_id))
-	{
-		printf("Appointment not found.\n");
-		return;
-	}
+    if (!appointmentExists(app_id))
+    {
+        printf("Appointment not found.\n");
+        return;
+    }
 
-	MedicalRecord rec;
-	rec.id = getNextId(MEDICAL_RECORD_FILE, sizeof(MedicalRecord));
-	rec.appointment_id = app_id;
+    MedicalRecord rec;
+    rec.id = getNextId(MEDICAL_RECORD_FILE, sizeof(MedicalRecord));
+    rec.appointment_id = app_id;
 
-	printf("Enter Diagnosis: ");
-	getInput(rec.diagnosis, sizeof(rec.diagnosis));
-	printf("Enter Prescription: ");
-	getInput(rec.prescription, sizeof(rec.prescription));
+    printf("Enter Diagnosis: ");
+    getInput(rec.diagnosis, sizeof(rec.diagnosis));
+    printf("Enter Prescription: ");
+    getInput(rec.prescription, sizeof(rec.prescription));
 
-	FILE *fp = fopen(MEDICAL_RECORD_FILE, "ab");
-	if (!fp)
-	{
-		perror("Error opening records file");
-		return;
-	}
-	fwrite(&rec, sizeof(MedicalRecord), 1, fp);
-	fclose(fp);
+    FILE *fp = fopen(MEDICAL_RECORD_FILE, "ab");
+    if (!fp)
+    {
+        perror("Error opening records file");
+        return;
+    }
+    fwrite(&rec, sizeof(MedicalRecord), 1, fp);
+    fclose(fp);
 
-	printf("Medical record added successfully.\n");
+    /* Mark the appointment as Done after medical record is added */
+    markAppointmentAsDone(app_id);
+
+    printf("Medical record added successfully.\n");
+    printf("Appointment status set to 'Done'.\n");
 }
 
+/* View Patient Medical History */
 void viewPatientMedicalHistory()
 {
 	printf("\n--- View Patient Medical History ---\n");
@@ -937,7 +958,8 @@ void viewPatientMedicalHistory()
 
 	if (!app_fp || !rec_fp)
 	{
-		printf("Could not open data files.\n");
+		/* Improved message for missing files */
+		printf("No reports found.\n");
 		if (app_fp)
 			fclose(app_fp);
 		if (rec_fp)
@@ -971,7 +993,7 @@ void viewPatientMedicalHistory()
 	}
 
 	if (records_found == 0)
-		printf("No medical records found for this patient.\n");
+		printf("No reports found.\n");
 
 	fclose(app_fp);
 	fclose(rec_fp);
@@ -987,7 +1009,8 @@ void viewDoctorReports(int patientId)
 
 	if (!app_fp || !rec_fp)
 	{
-		printf("Error opening files.\n");
+		/* Improved message for missing files */
+		printf("No reports found.\n");
 		if (app_fp)
 			fclose(app_fp);
 		if (rec_fp)
@@ -1022,7 +1045,7 @@ void viewDoctorReports(int patientId)
 	}
 
 	if (records_found == 0)
-		printf("No doctor reports found for this patient.\n");
+		printf("No reports found.\n");
 
 	fclose(app_fp);
 	fclose(rec_fp);
@@ -1115,29 +1138,29 @@ void viewAllBills(void)
 // --- Search ---
 void searchPatientByName(const char *name)
 {
-	FILE *fp = fopen(PATIENT_FILE, "rb");
-	if (!fp)
-	{
-		printf("No patients found.\n");
-		return;
-	}
+    FILE *fp = fopen(PATIENT_FILE, "rb");
+    if (!fp)
+    {
+        printf("No patients found.\n");
+        return;
+    }
 
-	Patient p;
-	printf("\n%-5s %-15s %-5s %-10s %-15s %-20s\n",
-		   "ID", "Name", "Age", "Gender", "Phone", "Disease");
+    Patient p;
+    printf("\n%-5s %-20s %-5s %-10s %-15s\n",
+           "ID", "Name", "Age", "Gender", "Phone");
 
-	int found = 0;
-	while (fread(&p, sizeof(Patient), 1, fp))
-	{
-		if (strstr(p.name, name) != NULL)
-		{
-			printf("%-5d %-15s %-5d %-10s %-15s %-20s\n",
-				   p.id, p.name, p.age, p.gender, p.phone, p.disease);
-			found = 1;
-		}
-	}
-	fclose(fp);
+    int found = 0;
+    while (fread(&p, sizeof(Patient), 1, fp))
+    {
+        if (strstr(p.name, name) != NULL)
+        {
+            printf("%-5d %-20s %-5d %-10s %-15s\n",
+                   p.id, p.name, p.age, p.gender, p.phone);
+            found = 1;
+        }
+    }
+    fclose(fp);
 
-	if (!found)
-		printf("No patients found with name containing '%s'.\n", name);
+    if (!found)
+        printf("No patients found with name containing '%s'.\n", name);
 }
