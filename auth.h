@@ -6,18 +6,6 @@
 #include <string.h>
 #include "crud.h"
 
-/* Credential files */
-#define PATIENTS_CRED_FILE "data/patients_credentials.dat"
-#define DOCTORS_CRED_FILE "data/doctors_credentials.dat"
-#define ADMINS_CRED_FILE "data/admins_credentials.dat"
-
-typedef struct Credential
-{
-    int id; /* unified user id (same across all roles) */
-    char username[64];
-    char password[64]; /* stored in plain text for this simple project */
-} Credential;
-
 /* Authentication flows */
 int patientSignup(void);
 int doctorSignup(void);

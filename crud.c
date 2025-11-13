@@ -112,50 +112,22 @@ static int patientExists(int id)
  */
 static int doctorExists(int id)
 {
-	/* First, check the main doctor profiles file */
-	FILE *fp = fopen(DOCTOR_FILE, "rb");
-	if (fp)
-	{
-		Doctor d;
-		while (fread(&d, sizeof(Doctor), 1, fp))
-		{
-			if (d.id == id)
-			{
-				fclose(fp);
-				return 1; /* Found in doctor profiles */
-			}
-		}
-		fclose(fp);
-	}
+    /* Only check the main doctor profiles file now */
+    FILE *fp = fopen(DOCTOR_FILE, "rb");
+    if (!fp)
+        return 0;
 
-	/*
-	 * Fallback: check doctor credentials file in case data was migrated
-	 * or stored in a different location. We use a local struct instead of
-	 * including auth.h to avoid circular dependencies.
-	 */
-	const char *cred_path = "data/doctors_credentials.dat";
-	FILE *cf = fopen(cred_path, "rb");
-	if (cf)
-	{
-		/* Local struct matching the Credential layout without circular include */
-		struct
-		{
-			int id;
-			char username[64];
-			char password[64];
-		} cred;
-		while (fread(&cred, sizeof(cred), 1, cf))
-		{
-			if (cred.id == id)
-			{
-				fclose(cf);
-				return 1; /* Found in credentials file */
-			}
-		}
-		fclose(cf);
-	}
-
-	return 0; /* Doctor not found in either location */
+    Doctor d;
+    while (fread(&d, sizeof(Doctor), 1, fp))
+    {
+        if (d.id == id)
+        {
+            fclose(fp);
+            return 1;
+        }
+    }
+    fclose(fp);
+    return 0;
 }
 
 /* ============================================================================

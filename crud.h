@@ -5,6 +5,7 @@
 
 #define PATIENT_FILE "data/patients.dat"
 #define DOCTOR_FILE "data/doctors.dat"
+#define ADMIN_FILE "data/admins.dat"
 #define APPOINTMENT_FILE "data/appointments.dat"
 #define MEDICAL_RECORD_FILE "data/medical_records.dat"
 #define BILL_FILE "data/bills.dat"
@@ -16,6 +17,8 @@ typedef struct
     int age;
     char gender[10];
     char phone[15];
+    char username[64];   /* moved credential here */
+    char password[64];   /* plain text for simple project */
     /* disease removed — patient profile does not store disease by design */
 } Patient;
 
@@ -25,6 +28,8 @@ typedef struct
     char name[50];
     char specialization[50];
     char phone[15];
+    char username[64];   /* moved credential here */
+    char password[64];
 } Doctor;
 
 typedef struct
@@ -54,6 +59,15 @@ typedef struct
     char date[20];
     char status[20]; /* Paid / Unpaid */
 } Bill;
+
+/* New Admin profile (credentials stored in admin file) */
+typedef struct
+{
+    int id;
+    char username[64];
+    char password[64];
+    char name[50];
+} Admin;
 
 /* Patient CRUD */
 void addPatient();
