@@ -604,6 +604,7 @@ void adminPortal(int adminId)
         printf("3) Search Patient by Name\n");
         printf("4) View All Appointments & Assign Doctor\n");
         printf("5) View Analytics & Reports\n");
+        printf("6) Billing Management\n");
         printf("0) Logout\n");
         printf("Choose: ");
         if (scanf("%d", &choice) != 1)
@@ -708,6 +709,9 @@ void adminPortal(int adminId)
                     }
                 }
             }
+            break;
+        case 6:
+            manageBilling();
             break;
         case 0:
             printf("Logging out...\n");

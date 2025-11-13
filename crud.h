@@ -98,6 +98,9 @@ void viewDoctorReports(int patientId);
 void generateBill(int appointmentId, int patientId, float amount);
 void viewPatientBills(int patientId);
 void viewAllBills(void);
+/* New billing management helpers */
+void manageBilling(void);
+void markBillAsPaid(int billId);
 
 /* Search */
 void searchPatientByName(const char *name);
