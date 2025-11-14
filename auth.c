@@ -41,7 +41,8 @@ int validatePassword(const char *pwd)
 static int usernameInPatients(const char *username)
 {
     FILE *fp = fopen(PATIENT_FILE, "rb");
-    if (!fp) return 0;
+    if (!fp)
+        return 0;
     Patient p;
     while (fread(&p, sizeof(Patient), 1, fp))
     {
@@ -59,7 +60,8 @@ static int usernameInPatients(const char *username)
 static int usernameInDoctors(const char *username)
 {
     FILE *fp = fopen(DOCTOR_FILE, "rb");
-    if (!fp) return 0;
+    if (!fp)
+        return 0;
     Doctor d;
     while (fread(&d, sizeof(Doctor), 1, fp))
     {
@@ -77,7 +79,8 @@ static int usernameInDoctors(const char *username)
 static int usernameInAdmins(const char *username)
 {
     FILE *fp = fopen(ADMIN_FILE, "rb");
-    if (!fp) return 0;
+    if (!fp)
+        return 0;
     Admin a;
     while (fread(&a, sizeof(Admin), 1, fp))
     {
@@ -94,9 +97,12 @@ static int usernameInAdmins(const char *username)
 /* Check username across all profile files to enforce global uniqueness */
 static int usernameExistsGlobally(const char *username)
 {
-    if (usernameInPatients(username)) return 1;
-    if (usernameInDoctors(username)) return 1;
-    if (usernameInAdmins(username)) return 1;
+    if (usernameInPatients(username))
+        return 1;
+    if (usernameInDoctors(username))
+        return 1;
+    if (usernameInAdmins(username))
+        return 1;
     return 0;
 }
 
@@ -106,7 +112,8 @@ static int checkCredentialProfile(const char *file, const char *username, const 
 {
     /* role: 0=patient,1=doctor,2=admin */
     FILE *fp = fopen(file, "rb");
-    if (!fp) return 0;
+    if (!fp)
+        return 0;
 
     if (role == 0)
     {
@@ -178,7 +185,8 @@ static int savePatientProfile(const Patient *p)
     system("mkdir -p data");
 #endif
     FILE *pf = fopen(PATIENT_FILE, "ab");
-    if (!pf) return 0;
+    if (!pf)
+        return 0;
     size_t w = fwrite(p, sizeof(Patient), 1, pf);
     fclose(pf);
     return w == 1;
@@ -193,7 +201,8 @@ static int saveDoctorProfile(const Doctor *d)
     system("mkdir -p data");
 #endif
     FILE *df = fopen(DOCTOR_FILE, "ab");
-    if (!df) return 0;
+    if (!df)
+        return 0;
     size_t w = fwrite(d, sizeof(Doctor), 1, df);
     fclose(df);
     return w == 1;
@@ -208,7 +217,8 @@ static int saveAdminProfile(const Admin *a)
     system("mkdir -p data");
 #endif
     FILE *af = fopen(ADMIN_FILE, "ab");
-    if (!af) return 0;
+    if (!af)
+        return 0;
     size_t w = fwrite(a, sizeof(Admin), 1, af);
     fclose(af);
     return w == 1;
@@ -255,18 +265,71 @@ int patientSignup(void)
         }
         break;
     } while (1);
-    strncpy(p.password, pwd1, sizeof(p.password)-1);
+    strncpy(p.password, pwd1, sizeof(p.password) - 1);
 
     printf("\nEnter patient profile details:\n");
     printf("Name: ");
     getInputAuth(p.name, sizeof(p.name));
-    printf("Age: ");
-    scanf("%d", &p.age);
-    clearStdin();
-    printf("Gender: ");
-    getInputAuth(p.gender, sizeof(p.gender));
-    printf("Phone: ");
-    getInputAuth(p.phone, sizeof(p.phone));
+
+    /* Age validation: must be integer 1..120 */
+    while (1)
+    {
+        char agebuf[16];
+        printf("Age: ");
+        getInputAuth(agebuf, sizeof(agebuf));
+        if (agebuf[0] == '\0')
+        {
+            printf("Age cannot be empty.\n");
+            continue;
+        }
+        int age;
+        if (sscanf(agebuf, "%d", &age) != 1 || age <= 0 || age > 120)
+        {
+            printf("Invalid age. Enter a number between 1 and 120.\n");
+            continue;
+        }
+        p.age = age;
+        break;
+    }
+
+    /* Gender: basic validation (non-empty, alphabetic) */
+    while (1)
+    {
+        printf("Gender: ");
+        getInputAuth(p.gender, sizeof(p.gender));
+        if (strlen(p.gender) == 0)
+        {
+            printf("Gender cannot be empty.\n");
+            continue;
+        }
+        int ok = 0;
+        for (size_t i = 0; i < strlen(p.gender); ++i)
+            if (isalpha((unsigned char)p.gender[i]) || p.gender[i] == ' ')
+                ok = 1;
+        if (!ok)
+        {
+            printf("Invalid gender. Enter Male/Female/Other or similar.\n");
+            continue;
+        }
+        break;
+    }
+
+    /* Phone: require at least 7 digits */
+    while (1)
+    {
+        printf("Phone: ");
+        getInputAuth(p.phone, sizeof(p.phone));
+        int digits = 0;
+        for (size_t i = 0; i < strlen(p.phone); ++i)
+            if (isdigit((unsigned char)p.phone[i]))
+                digits++;
+        if (digits < 7)
+        {
+            printf("Phone must contain at least 7 digits.\n");
+            continue;
+        }
+        break;
+    }
 
     if (!savePatientProfile(&p))
     {
@@ -318,15 +381,30 @@ int doctorSignup(void)
         }
         break;
     } while (1);
-    strncpy(d.password, pwd1, sizeof(d.password)-1);
+    strncpy(d.password, pwd1, sizeof(d.password) - 1);
 
     printf("\nEnter doctor profile details:\n");
     printf("Name: ");
     getInputAuth(d.name, sizeof(d.name));
     printf("Specialization: ");
     getInputAuth(d.specialization, sizeof(d.specialization));
-    printf("Phone: ");
-    getInputAuth(d.phone, sizeof(d.phone));
+
+    /* Phone: require at least 7 digits */
+    while (1)
+    {
+        printf("Phone: ");
+        getInputAuth(d.phone, sizeof(d.phone));
+        int digits = 0;
+        for (size_t i = 0; i < strlen(d.phone); ++i)
+            if (isdigit((unsigned char)d.phone[i]))
+                digits++;
+        if (digits < 7)
+        {
+            printf("Phone must contain at least 7 digits.\n");
+            continue;
+        }
+        break;
+    }
 
     if (!saveDoctorProfile(&d))
     {
@@ -378,7 +456,7 @@ int adminSignup(void)
         }
         break;
     } while (1);
-    strncpy(a.password, pwd1, sizeof(a.password)-1);
+    strncpy(a.password, pwd1, sizeof(a.password) - 1);
 
     printf("Name: ");
     getInputAuth(a.name, sizeof(a.name));
@@ -488,7 +566,11 @@ void patientPortal(int patientId)
             /* show appointments for this patient */
             {
                 FILE *fp = fopen(APPOINTMENT_FILE, "rb");
-                if (!fp) { printf("No appointments found.\n"); break; }
+                if (!fp)
+                {
+                    printf("No appointments found.\n");
+                    break;
+                }
                 Appointment a;
                 printf("\n%-5s %-10s %-20s %-25s %-10s\n",
                        "ID", "Doctor", "Date/Time", "Reason", "Status");
@@ -503,7 +585,8 @@ void patientPortal(int patientId)
                     }
                 }
                 fclose(fp);
-                if (!found) printf("No appointments found.\n");
+                if (!found)
+                    printf("No appointments found.\n");
             }
             break;
         case 2:
@@ -552,37 +635,42 @@ void doctorPortal(int doctorId)
         switch (choice)
         {
         case 1:
+        {
+            FILE *fp = fopen(APPOINTMENT_FILE, "rb");
+            if (!fp)
             {
-                FILE *fp = fopen(APPOINTMENT_FILE, "rb");
-                if (!fp) { printf("No appointments found.\n"); break; }
-                Appointment a;
-                printf("\n%-5s %-10s %-20s %-25s %-10s\n",
-                       "ID", "Patient", "Date/Time", "Reason", "Status");
-                int found = 0;
-                while (fread(&a, sizeof(Appointment), 1, fp))
-                {
-                    if (a.doctor_id == doctorId)
-                    {
-                        printf("%-5d %-10d %-20s %-25s %-10s\n",
-                               a.id, a.patient_id, a.appointment_date, a.reason, a.status);
-                        found = 1;
-                    }
-                }
-                fclose(fp);
-                if (!found) printf("No appointments found.\n");
+                printf("No appointments found.\n");
+                break;
             }
-            break;
+            Appointment a;
+            printf("\n%-5s %-10s %-20s %-25s %-10s\n",
+                   "ID", "Patient", "Date/Time", "Reason", "Status");
+            int found = 0;
+            while (fread(&a, sizeof(Appointment), 1, fp))
+            {
+                if (a.doctor_id == doctorId)
+                {
+                    printf("%-5d %-10d %-20s %-25s %-10s\n",
+                           a.id, a.patient_id, a.appointment_date, a.reason, a.status);
+                    found = 1;
+                }
+            }
+            fclose(fp);
+            if (!found)
+                printf("No appointments found.\n");
+        }
+        break;
         case 2:
             addMedicalRecord();
             break;
         case 3:
-            {
-                char name[50];
-                printf("Enter patient name to search: ");
-                getInputAuth(name, sizeof(name));
-                searchPatientByName(name);
-            }
-            break;
+        {
+            char name[50];
+            printf("Enter patient name to search: ");
+            getInputAuth(name, sizeof(name));
+            searchPatientByName(name);
+        }
+        break;
         case 0:
             printf("Logging out...\n");
             return;
@@ -603,7 +691,7 @@ void adminPortal(int adminId)
         printf("2) View All Doctors\n");
         printf("3) Search Patient by Name\n");
         printf("4) View All Appointments & Assign Doctor\n");
-        printf("5) View Analytics & Reports\n");
+        printf("5) Generate Bill\n");
         printf("6) Billing Management\n");
         printf("0) Logout\n");
         printf("Choose: ");
@@ -623,93 +711,76 @@ void adminPortal(int adminId)
             viewDoctors();
             break;
         case 3:
-            {
-                char name[50];
-                printf("Enter patient name to search: ");
-                getInputAuth(name, sizeof(name));
-                searchPatientByName(name);
-            }
-            break;
+        {
+            char name[50];
+            printf("Enter patient name to search: ");
+            getInputAuth(name, sizeof(name));
+            searchPatientByName(name);
+        }
+        break;
         case 4:
+        {
+            int sub = -1;
+            while (sub != 0)
             {
-                int sub = -1;
-                while (sub != 0)
+                printf("\n--- Appointment Management ---\n");
+                printf("1) View All Appointments\n");
+                printf("2) Assign Doctor to Patient\n");
+                printf("0) Back\n");
+                printf("Choose: ");
+                if (scanf("%d", &sub) != 1)
                 {
-                    printf("\n--- Appointment Management ---\n");
-                    printf("1) View All Appointments\n");
-                    printf("2) Assign Doctor to Patient\n");
-                    printf("0) Back\n");
-                    printf("Choose: ");
-                    if (scanf("%d", &sub) != 1)
-                    {
-                        clearStdin();
-                        sub = -1;
-                    }
                     clearStdin();
-                    switch (sub)
+                    sub = -1;
+                }
+                clearStdin();
+                switch (sub)
+                {
+                case 1:
+                {
+                    FILE *fp = fopen(APPOINTMENT_FILE, "rb");
+                    if (!fp)
                     {
-                    case 1:
-                        {
-                            FILE *fp = fopen(APPOINTMENT_FILE, "rb");
-                            if (!fp) { printf("No appointments found.\n"); break; }
-                            Appointment a;
-                            printf("\n%-5s %-10s %-10s %-20s %-25s %-10s\n",
-                                   "ID", "Patient", "Doctor", "Date/Time", "Reason", "Status");
-                            while (fread(&a, sizeof(Appointment), 1, fp))
-                                printf("%-5d %-10d %-10d %-20s %-25s %-10s\n",
-                                       a.id, a.patient_id, a.doctor_id, a.appointment_date, a.reason, a.status);
-                            fclose(fp);
-                        }
-                        break;
-                    case 2:
-                        assignDoctorToPatient();
-                        break;
-                    case 0:
-                        break;
-                    default:
-                        printf("Invalid choice.\n");
+                        printf("No appointments found.\n");
                         break;
                     }
+                    Appointment a;
+                    printf("\n%-5s %-10s %-10s %-20s %-25s %-10s\n",
+                           "ID", "Patient", "Doctor", "Date/Time", "Reason", "Status");
+                    while (fread(&a, sizeof(Appointment), 1, fp))
+                        printf("%-5d %-10d %-10d %-20s %-25s %-10s\n",
+                               a.id, a.patient_id, a.doctor_id, a.appointment_date, a.reason, a.status);
+                    fclose(fp);
+                }
+                break;
+                case 2:
+                    assignDoctorToPatient();
+                    break;
+                case 0:
+                    break;
+                default:
+                    printf("Invalid choice.\n");
+                    break;
                 }
             }
-            break;
+        }
+        break;
         case 5:
-            {
-                int sub = -1;
-                while (sub != 0)
-                {
-                    printf("\n=== Analytics & Reports ===\n");
-                    printf("1) Total Patients & Doctors\n");
-                    printf("2) Total Appointments\n");
-                    printf("3) Doctor Appointment Count\n");
-                    printf("0) Back to Menu\n");
-                    printf("Choose: ");
-                    if (scanf("%d", &sub) != 1)
-                    {
-                        clearStdin();
-                        sub = -1;
-                    }
-                    clearStdin();
-                    switch (sub)
-                    {
-                    case 1:
-                        totalPatientsAndDoctors();
-                        break;
-                    case 2:
-                        totalAppointments();
-                        break;
-                    case 3:
-                        doctorAppointmentCount();
-                        break;
-                    case 0:
-                        break;
-                    default:
-                        printf("Invalid choice.\n");
-                        break;
-                    }
-                }
-            }
-            break;
+        {
+            int appointmentId, patientId;
+            float amount;
+            printf("Enter Appointment ID: ");
+            scanf("%d", &appointmentId);
+            clearStdin();
+            printf("Enter Patient ID: ");
+            scanf("%d", &patientId);
+            clearStdin();
+            printf("Enter Bill Amount: $");
+            scanf("%f", &amount);
+            clearStdin();
+            generateBill(appointmentId, patientId, amount);
+        }
+        break;
         case 6:
             manageBilling();
             break;

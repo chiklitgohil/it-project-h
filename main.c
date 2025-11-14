@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "auth.h"
 #include "crud.h"
+#include "analytics.h"
 
 /* Top-level Main Menu
    - Login

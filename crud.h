@@ -17,8 +17,8 @@ typedef struct
     int age;
     char gender[10];
     char phone[15];
-    char username[64];   /* moved credential here */
-    char password[64];   /* plain text for simple project */
+    char username[64]; /* moved credential here */
+    char password[64]; /* plain text for simple project */
     /* disease removed — patient profile does not store disease by design */
 } Patient;
 
@@ -28,7 +28,7 @@ typedef struct
     char name[50];
     char specialization[50];
     char phone[15];
-    char username[64];   /* moved credential here */
+    char username[64]; /* moved credential here */
     char password[64];
 } Doctor;
 
@@ -78,6 +78,8 @@ void deletePatient();
 /* Doctor CRUD */
 void addDoctor();
 void viewDoctors();
+/* Search patients who have appointments with a specific doctor */
+void searchPatientsByDoctor(int doctorId);
 void updateDoctor();
 void deleteDoctor();
 
