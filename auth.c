@@ -775,7 +775,7 @@ void adminPortal(int adminId)
             printf("Enter Patient ID: ");
             scanf("%d", &patientId);
             clearStdin();
-            printf("Enter Bill Amount: $");
+            printf("Enter Bill Amount: ₹");
             scanf("%f", &amount);
             clearStdin();
             generateBill(appointmentId, patientId, amount);
